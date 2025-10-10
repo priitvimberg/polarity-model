@@ -1,3 +1,6 @@
+@app.route('/')
+def index():
+    return app.send_static_file('frontend/index.html')  # Serves HTML from /static/frontend
 <script>
     const container = document.getElementById('network');
     const options = {
