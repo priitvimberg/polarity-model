@@ -2,4 +2,3 @@ flask==3.0.3
 gunicorn==22.0.0  # Production WSGI server
 networkx==3.3
 requests==2.32.3
-sqlite3  # Built-in, no need to list
