@@ -1,0 +1,56 @@
+<script>
+    const container = document.getElementById('network');
+    const options = {
+        nodes: { shape: 'dot', scaling: { label: { enabled: true } } },
+        edges: { arrows: 'to', smooth: { type: 'continuous' } },
+        interaction: { zoomView: true, dragView: true }
+    };
+    let network = new vis.Network(container, {}, options);
+
+    // Zoom slider for fractal scales
+    const zoomSlider = document.createElement('input');
+    zoomSlider.type = 'range';
+    zoomSlider.min = '0.2';
+    zoomSlider.max = '2';
+    zoomSlider.step = '0.1';
+    zoomSlider.value = '1';
+    zoomSlider.style.width = '200px';
+    document.body.appendChild(zoomSlider);
+    zoomSlider.addEventListener('input', () => {
+        network.setOptions({ interaction: { zoomSpeed: zoomSlider.value } });
+        network.fit();
+    });
+
+    document.getElementById('inputForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const prompt = document.getElementById('prompt').value;
+        const response = await fetch('http://localhost:5000/add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt })
+        });
+        const graphData = await response.json();
+        const visData = {
+            nodes: graphData.nodes.map(n => ({
+                id: n.id,
+                label: `${n.attributes.name}\n${n.attributes.role} (${n.attributes.ego_state})\nMat: ${n.attributes.maturity}`,
+                title: `History: ${n.attributes.history || 'None'}`,
+                size: n.attributes.maturity * 5,
+                color: n.attributes.metacognition ? '#FFD700' : '#1E90FF' // Gold for meta
+            })),
+            edges: graphData.links.map(l => ({
+                from: l.source,
+                to: l.target,
+                label: `${l.polarity.toFixed(1)} (${l.light_shadow}, ${l.role})`,
+                title: l.description,
+                color: { 
+                    color: l.consent ? 'green' : (l.polarity > 0 ? (l.light_shadow === 'light' ? '#32CD32' : 'orange') : 'red'),
+                    highlight: 'purple'
+                },
+                dashes: l.light_shadow === 'shadow',
+                width: l.consent ? 3 : 1
+            }))
+        };
+        network.setData(visData);
+    });
+</script>
