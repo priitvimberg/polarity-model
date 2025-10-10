@@ -1,10 +1,11 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory  # Add send_from_directory
+import os  # For any env vars
 import sqlite3
 import networkx as nx
 import json
 import requests
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static')
 
 # Database: Add role, metacognition, history to nodes; role, consent to edges
 def init_db():
@@ -156,5 +157,9 @@ def build_graph_from_db():
     conn.close()
     return graph
 
+@app.route('/')
+def index():
+    return send_from_directory('frontend', 'index.html')  # Serves from static/frontend/
+
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
