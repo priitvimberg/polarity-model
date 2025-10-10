@@ -1,13 +1,13 @@
-from flask import Flask, request, jsonify, send_from_directory  # Add send_from_directory
-import os  # For any env vars
+from flask import Flask, request, jsonify, send_from_directory  # Ensure this import
 import sqlite3
 import networkx as nx
 import json
 import requests
+import os
 
-app = Flask(__name__, static_folder='static')
+app = Flask(__name__, static_folder='static')  # Set static folder
 
-# Database: Add role, metacognition, history to nodes; role, consent to edges
+# Database setup
 def init_db():
     conn = sqlite3.connect('model.db')
     c = conn.cursor()
@@ -22,9 +22,9 @@ def init_db():
 
 init_db()
 
-# xAI Grok API (replace with your key from https://x.ai/api)
+# xAI Grok API
 GROK_API_URL = "https://api.x.ai/v1/chat/completions"
-API_KEY = "your_api_key_here"
+API_KEY = os.getenv("API_KEY")
 
 def interpret_input_with_grok(user_prompt):
     headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
@@ -42,12 +42,15 @@ def interpret_input_with_grok(user_prompt):
             }"""
         }, {"role": "user", "content": user_prompt}]
     }
-    response = requests.post(GROK_API_URL, headers=headers, json=data)
-    if response.status_code == 200:
-        return json.loads(response.json()['choices'][0]['message']['content'])
-    return {"error": "API call failed"}
+    try:
+        response = requests.post(GROK_API_URL, headers=headers, json=data)
+        if response.status_code == 200:
+            return json.loads(response.json()['choices'][0]['message']['content'])
+        return {"error": f"API call failed: {response.status_code}"}
+    except Exception as e:
+        return {"error": f"API call error: {str(e)}"}
 
-# Interaction logic: Tension Triangle, metacognition, tango steps
+# Interaction logic
 def apply_interactions(graph, iterations=5, mode='tango'):
     ego_states = {'Free Child': 1, 'Adapted Child': 2, 'Adult': 3, 'Nurturing Parent': 4, 'Controlling Parent': 5}
     roles = {'Victim': -1, 'Rescuer': 0, 'Persecutor': -1, 'Creator': 1, 'Coach': 1, 'Challenger': 1}
@@ -57,32 +60,24 @@ def apply_interactions(graph, iterations=5, mode='tango'):
             light_shadow = data.get('light_shadow', 'light')
             edge_role = data.get('role', '')
             consent = data.get('consent', False)
-
-            # Polarity flip: Shadow or extreme polarity triggers
             if abs(polarity) > 0.7 or light_shadow == 'shadow':
                 data['polarity'] = -polarity
                 data['light_shadow'] = 'shadow' if light_shadow == 'light' else 'light'
                 data['description'] += f" (flipped to {data['light_shadow']}—tango spin!)"
-
-            # Node updates: Maturity, roles, metacognition
             node_u, node_v = graph.nodes[u], graph.nodes[v]
             mat_u, mat_v = node_u.get('maturity', 3), node_v.get('maturity', 3)
             state_u, state_v = node_u.get('ego_state', 'Adult'), node_v.get('ego_state', 'Adult')
             role_u, role_v = node_u.get('role', ''), node_v.get('role', '')
             meta_u, meta_v = node_u.get('metacognition', False), node_v.get('metacognition', False)
-
-            # Tension Triangle logic
             avg_mat = (mat_u + mat_v) / 2
             if polarity < 0 and light_shadow == 'shadow' and edge_role in ['Victim-Rescuer', 'Victim-Persecutor']:
-                # Damage propagates unless dampened
-                reduction = 0.3 if (meta_u or meta_v or consent) else 1  # Metacognition/consent dampens 70%
+                reduction = 0.3 if (meta_u or meta_v or consent) else 1
                 new_mat_u = max(1, mat_u - abs(polarity) * reduction)
                 new_mat_v = max(1, mat_v - abs(polarity) * reduction)
                 if avg_mat < 3:
                     node_u['role'] = 'Victim' if roles.get(role_u, 0) <= 0 else role_u
                     node_v['role'] = 'Victim' if roles.get(role_v, 0) <= 0 else role_v
                 else:
-                    # Flip to Empowerment Dynamic
                     flip_map = {'Victim': 'Creator', 'Rescuer': 'Coach', 'Persecutor': 'Challenger'}
                     node_u['role'] = flip_map.get(role_u, role_u)
                     node_v['role'] = flip_map.get(role_v, role_v)
@@ -91,7 +86,6 @@ def apply_interactions(graph, iterations=5, mode='tango'):
                 node_u['history'] = (node_u.get('history', '') + f"; {state_u}→{node_u['role']}").strip('; ')
                 node_v['history'] = (node_v.get('history', '') + f"; {state_v}→{node_v['role']}").strip('; ')
             else:
-                # Positive/light/consent: Boost maturity, ego-state
                 boost = polarity * (avg_mat / 5) * (1.5 if consent else 1.2)
                 new_state_key = max(ego_states.keys(), key=lambda k: ego_states[k] if ego_states.get(state_u, 3) < ego_states[k] else 0)
                 if boost > 0.5 or meta_u:
@@ -102,47 +96,11 @@ def apply_interactions(graph, iterations=5, mode='tango'):
                     node_v['history'] = (node_v.get('history', '') + f"; {state_v}→{new_state_key}").strip('; ')
                 node_u['maturity'] = min(5, mat_u + boost)
                 node_v['maturity'] = min(5, mat_v + boost)
-
-                # Fractal ripple: Propagate to neighbors, damped by high maturity
                 for neighbor in graph.neighbors(u):
                     if graph.nodes[neighbor].get('maturity', 3) > 4:
                         continue
                     graph.nodes[neighbor]['maturity'] = min(5, graph.nodes[neighbor]['maturity'] + boost * 0.4)
     return graph
-
-@app.route('/add', methods=['POST'])
-def add_to_model():
-    user_prompt = request.json.get('prompt')
-    interpreted = interpret_input_with_grok(user_prompt)
-    if 'error' in interpreted:
-        return jsonify(interpreted), 500
-
-    conn = sqlite3.connect('model.db')
-    c = conn.cursor()
-
-    # Add/update nodes
-    node_ids = []
-    for node_data in interpreted['nodes']:
-        c.execute("INSERT OR IGNORE INTO nodes (name, maturity, ego_state, role, metacognition, history) VALUES (?, ?, ?, ?, ?, ?)",
-                  (node_data['name'], node_data['maturity'], node_data['ego_state'], node_data['role'],
-                   node_data['metacognition'], node_data.get('history', '')))
-        c.execute("SELECT id FROM nodes WHERE name=?", (node_data['name'],))
-        node_ids.append(c.fetchone()[0])
-
-    # Add edge
-    if len(node_ids) == 2:
-        c.execute("INSERT INTO edges (source_id, target_id, polarity, light_shadow, role, consent, description) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                  (node_ids[0], node_ids[1], interpreted['polarity'], interpreted['light_shadow'], interpreted['role'],
-                   interpreted['consent'], interpreted['description']))
-
-    conn.commit()
-    conn.close()
-
-    # Build and simulate
-    graph = build_graph_from_db()
-    graph = apply_interactions(graph, iterations=5, mode='tango')
-
-    return jsonify(nx.node_link_data(graph))
 
 def build_graph_from_db():
     graph = nx.Graph()
@@ -157,9 +115,34 @@ def build_graph_from_db():
     conn.close()
     return graph
 
-@app.route('/')
+@app.route('/add', methods=['POST'])
+def add_to_model():
+    user_prompt = request.json.get('prompt')
+    interpreted = interpret_input_with_grok(user_prompt)
+    if 'error' in interpreted:
+        return jsonify(interpreted), 500
+    conn = sqlite3.connect('model.db')
+    c = conn.cursor()
+    node_ids = []
+    for node_data in interpreted['nodes']:
+        c.execute("INSERT OR IGNORE INTO nodes (name, maturity, ego_state, role, metacognition, history) VALUES (?, ?, ?, ?, ?, ?)",
+                  (node_data['name'], node_data['maturity'], node_data['ego_state'], node_data['role'],
+                   node_data['metacognition'], node_data.get('history', '')))
+        c.execute("SELECT id FROM nodes WHERE name=?", (node_data['name'],))
+        node_ids.append(c.fetchone()[0])
+    if len(node_ids) == 2:
+        c.execute("INSERT INTO edges (source_id, target_id, polarity, light_shadow, role, consent, description) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                  (node_ids[0], node_ids[1], interpreted['polarity'], interpreted['light_shadow'], interpreted['role'],
+                   interpreted['consent'], interpreted['description']))
+    conn.commit()
+    conn.close()
+    graph = build_graph_from_db()
+    graph = apply_interactions(graph, iterations=5, mode='tango')
+    return jsonify(nx.node_link_data(graph))
+
+@app.route('/')  # Add this route
 def index():
-    return send_from_directory('frontend', 'index.html')  # Serves from static/frontend/
+    return send_from_directory('frontend', 'index.html')  # Serves static/frontend/index.html
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+    app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))  # Gunicorn-friendly
