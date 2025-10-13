@@ -1,11 +1,16 @@
-from flask import Flask, request, jsonify, send_from_directory  # Ensure this import
+from flask import Flask, request, jsonify, send_from_directory
 import sqlite3
 import networkx as nx
 import json
 import requests
 import os
+import logging  # Add logging
 
-app = Flask(__name__, static_folder='static')  # Set static folder
+# Setup logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
+app = Flask(__name__, static_folder='static')
 
 # Database setup
 def init_db():
@@ -46,8 +51,10 @@ def interpret_input_with_grok(user_prompt):
         response = requests.post(GROK_API_URL, headers=headers, json=data)
         if response.status_code == 200:
             return json.loads(response.json()['choices'][0]['message']['content'])
+        logger.error(f"API call failed: {response.status_code}")
         return {"error": f"API call failed: {response.status_code}"}
     except Exception as e:
+        logger.error(f"API call error: {str(e)}")
         return {"error": f"API call error: {str(e)}"}
 
 # Interaction logic
@@ -120,6 +127,7 @@ def add_to_model():
     user_prompt = request.json.get('prompt')
     interpreted = interpret_input_with_grok(user_prompt)
     if 'error' in interpreted:
+        logger.error(f"Error in add_to_model: {interpreted['error']}")
         return jsonify(interpreted), 500
     conn = sqlite3.connect('model.db')
     c = conn.cursor()
@@ -142,7 +150,12 @@ def add_to_model():
 
 @app.route('/')
 def index():
-    return send_from_directory('static/frontend', 'index.html')  # Correct path
-    
+    try:
+        logger.debug("Attempting to serve static/frontend/index.html")
+        return send_from_directory('frontend', 'index.html')
+    except Exception as e:
+        logger.error(f"Error serving index.html: {str(e)}")
+        return jsonify({"error": f"Failed to serve index.html: {str(e)}"}), 500
+
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))  # Gunicorn-friendly
+    app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
