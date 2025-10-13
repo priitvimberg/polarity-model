@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify, send_file
+from flask_cors import CORS
 import sqlite3
 import networkx as nx
 import json
@@ -10,10 +11,11 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-# Set static folder to match repo: frontend/static
+# Set static folder
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 STATIC_DIR = os.path.join(PROJECT_ROOT, 'frontend', 'static')
 app = Flask(__name__, static_folder=STATIC_DIR)
+CORS(app)  # Enable CORS
 logger.debug(f"Project root: {PROJECT_ROOT}, Static folder: {STATIC_DIR}")
 
 # Database setup
@@ -34,8 +36,12 @@ init_db()
 # xAI Grok API
 GROK_API_URL = "https://api.x.ai/v1/chat/completions"
 API_KEY = os.getenv("API_KEY")
+logger.debug(f"API_KEY prefix: {API_KEY[:5] if API_KEY else 'None'}...")
 
 def interpret_input_with_grok(user_prompt):
+    if not API_KEY:
+        logger.error("API_KEY environment variable not set")
+        return {"error": "API_KEY not set"}
     headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
     data = {
         "model": "grok-4",
@@ -51,11 +57,17 @@ def interpret_input_with_grok(user_prompt):
             }"""
         }, {"role": "user", "content": user_prompt}]
     }
+    logger.debug(f"Sending request to Grok API with prompt: {user_prompt[:50]}...")
     try:
         response = requests.post(GROK_API_URL, headers=headers, json=data)
+        logger.debug(f"Grok API response status: {response.status_code}, body: {response.text[:200]}...")
         if response.status_code == 200:
-            return json.loads(response.json()['choices'][0]['message']['content'])
-        logger.error(f"API call failed: {response.status_code}")
+            try:
+                return json.loads(response.text)
+            except json.JSONDecodeError as e:
+                logger.error(f"JSON decode error: {str(e)}, response: {response.text[:200]}")
+                return {"error": f"JSON decode error: {str(e)}"}
+        logger.error(f"API call failed: {response.status_code}, body: {response.text[:200]}")
         return {"error": f"API call failed: {response.status_code}"}
     except Exception as e:
         logger.error(f"API call error: {str(e)}")
@@ -127,29 +139,43 @@ def build_graph_from_db():
 
 @app.route('/add', methods=['POST'])
 def add_to_model():
-    user_prompt = request.json.get('prompt')
-    interpreted = interpret_input_with_grok(user_prompt)
-    if 'error' in interpreted:
-        logger.error(f"Error in add_to_model: {interpreted['error']}")
-        return jsonify(interpreted), 500
-    conn = sqlite3.connect('model.db')
-    c = conn.cursor()
-    node_ids = []
-    for node_data in interpreted['nodes']:
-        c.execute("INSERT OR IGNORE INTO nodes (name, maturity, ego_state, role, metacognition, history) VALUES (?, ?, ?, ?, ?, ?)",
-                  (node_data['name'], node_data['maturity'], node_data['ego_state'], node_data['role'],
-                   node_data['metacognition'], node_data.get('history', '')))
-        c.execute("SELECT id FROM nodes WHERE name=?", (node_data['name'],))
-        node_ids.append(c.fetchone()[0])
-    if len(node_ids) == 2:
-        c.execute("INSERT INTO edges (source_id, target_id, polarity, light_shadow, role, consent, description) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                  (node_ids[0], node_ids[1], interpreted['polarity'], interpreted['light_shadow'], interpreted['role'],
-                   interpreted['consent'], interpreted['description']))
-    conn.commit()
-    conn.close()
-    graph = build_graph_from_db()
-    graph = apply_interactions(graph, iterations=5, mode='tango')
-    return jsonify(nx.node_link_data(graph))
+    try:
+        user_prompt = request.json.get('prompt')
+        logger.debug(f"Received prompt: {user_prompt}")
+        if not user_prompt:
+            logger.error("No prompt provided")
+            return jsonify({"error": "No prompt provided"}), 400
+        interpreted = interpret_input_with_grok(user_prompt)
+        logger.debug(f"Interpreted response: {interpreted}")
+        if 'error' in interpreted:
+            logger.error(f"Error in add_to_model: {interpreted['error']}")
+            return jsonify(interpreted), 500
+        conn = sqlite3.connect('model.db')
+        c = conn.cursor()
+        node_ids = []
+        for node_data in interpreted['nodes']:
+            c.execute("INSERT OR IGNORE INTO nodes (name, maturity, ego_state, role, metacognition, history) VALUES (?, ?, ?, ?, ?, ?)",
+                      (node_data['name'], node_data['maturity'], node_data['ego_state'], node_data['role'],
+                       node_data['metacognition'], node_data.get('history', '')))
+            c.execute("SELECT id FROM nodes WHERE name=?", (node_data['name'],))
+            result = c.fetchone()
+            if result is None:
+                logger.error(f"Failed to retrieve node ID for name: {node_data['name']}")
+                return jsonify({"error": f"Failed to retrieve node ID for name: {node_data['name']}"}), 500
+            node_ids.append(result[0])
+        if len(node_ids) == 2:
+            c.execute("INSERT INTO edges (source_id, target_id, polarity, light_shadow, role, consent, description) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                      (node_ids[0], node_ids[1], interpreted['polarity'], interpreted['light_shadow'], interpreted['role'],
+                       interpreted['consent'], interpreted['description']))
+        conn.commit()
+        conn.close()
+        graph = build_graph_from_db()
+        graph = apply_interactions(graph, iterations=5, mode='tango')
+        logger.debug(f"Graph data: {nx.node_link_data(graph)}")
+        return jsonify(nx.node_link_data(graph))
+    except Exception as e:
+        logger.error(f"Error in add_to_model: {str(e)}")
+        return jsonify({"error": f"Error in add_to_model: {str(e)}"}), 500
 
 @app.route('/')
 def index():
@@ -161,7 +187,7 @@ def index():
             return jsonify({"error": f"File not found: {file_path}"}), 404
         logger.debug(f"File permissions: {oct(os.stat(file_path).st_mode)[-3:]}")
         with open(file_path, 'r') as f:
-            content = f.read(100)  # Read first 100 chars for debug
+            content = f.read(100)
             logger.debug(f"File content preview: {content}")
         return send_file(file_path)
     except Exception as e:
