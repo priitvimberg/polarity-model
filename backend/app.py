@@ -4,7 +4,7 @@ import networkx as nx
 import json
 import requests
 import os
-import logging  # Add logging
+import logging
 
 # Setup logging
 logging.basicConfig(level=logging.DEBUG)
@@ -151,7 +151,11 @@ def add_to_model():
 @app.route('/')
 def index():
     try:
-        logger.debug("Attempting to serve static/frontend/index.html")
+        file_path = os.path.join(app.static_folder, 'frontend', 'index.html')
+        logger.debug(f"Attempting to serve {file_path}")
+        if not os.path.exists(file_path):
+            logger.error(f"File not found: {file_path}")
+            return jsonify({"error": f"File not found: {file_path}"}), 404
         return send_from_directory('frontend', 'index.html')
     except Exception as e:
         logger.error(f"Error serving index.html: {str(e)}")
