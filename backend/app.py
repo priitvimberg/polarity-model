@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_file
 import sqlite3
 import networkx as nx
 import json
@@ -159,7 +159,11 @@ def index():
         if not os.path.exists(file_path):
             logger.error(f"File not found: {file_path}")
             return jsonify({"error": f"File not found: {file_path}"}), 404
-        return send_from_directory('', 'index.html')
+        logger.debug(f"File permissions: {oct(os.stat(file_path).st_mode)[-3:]}")
+        with open(file_path, 'r') as f:
+            content = f.read(100)  # Read first 100 chars for debug
+            logger.debug(f"File content preview: {content}")
+        return send_file(file_path)
     except Exception as e:
         logger.error(f"Error serving index.html: {str(e)}")
         return jsonify({"error": f"Failed to serve index.html: {str(e)}"}), 500
