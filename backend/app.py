@@ -140,9 +140,9 @@ def add_to_model():
     graph = apply_interactions(graph, iterations=5, mode='tango')
     return jsonify(nx.node_link_data(graph))
 
-@app.route('/')  # Add this route
+@app.route('/')
 def index():
-    return send_from_directory('frontend', 'index.html')  # Serves static/frontend/index.html
-
+    return send_from_directory('static/frontend', 'index.html')  # Correct path
+    
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))  # Gunicorn-friendly
