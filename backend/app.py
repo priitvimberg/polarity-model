@@ -11,7 +11,10 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 # Set static folder to project_root/static
-app = Flask(__name__, static_folder='static')
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+STATIC_DIR = os.path.join(PROJECT_ROOT, 'static')
+app = Flask(__name__, static_folder=STATIC_DIR)
+logger.debug(f"Project root: {PROJECT_ROOT}, Static folder: {STATIC_DIR}")
 
 # Database setup
 def init_db():
@@ -171,12 +174,12 @@ def debug_files():
                 path = root.replace(startpath, '').lstrip('/')
                 file_tree[path or '.'] = files
             return file_tree
-        static_files = list_files(app.static_folder)
-        logger.debug(f"Static folder contents: {static_files}")
-        return jsonify({"static_folder": app.static_folder, "files": static_files})
+        project_files = list_files(PROJECT_ROOT)
+        logger.debug(f"Project root contents: {project_files}")
+        return jsonify({"project_root": PROJECT_ROOT, "files": project_files})
     except Exception as e:
-        logger.error(f"Error listing static folder: {str(e)}")
-        return jsonify({"error": f"Error listing static folder: {str(e)}"}), 500
+        logger.error(f"Error listing project root: {str(e)}")
+        return jsonify({"error": f"Error listing project root: {str(e)}"}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
