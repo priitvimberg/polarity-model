@@ -10,7 +10,10 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__, static_folder='static')
+# Set static folder to absolute path
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+STATIC_DIR = os.path.join(os.path.dirname(BASE_DIR), 'static')  # Points to project_root/static
+app = Flask(__name__, static_folder=STATIC_DIR)
 
 # Database setup
 def init_db():
@@ -160,6 +163,17 @@ def index():
     except Exception as e:
         logger.error(f"Error serving index.html: {str(e)}")
         return jsonify({"error": f"Failed to serve index.html: {str(e)}"}), 500
+
+# Debug route to list static folder contents
+@app.route('/debug/files')
+def debug_files():
+    try:
+        files = os.listdir(app.static_folder)
+        logger.debug(f"Static folder contents: {files}")
+        return jsonify({"static_folder": app.static_folder, "files": files})
+    except Exception as e:
+        logger.error(f"Error listing static folder: {str(e)}")
+        return jsonify({"error": f"Error listing static folder: {str(e)}"}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
