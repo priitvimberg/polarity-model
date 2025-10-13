@@ -1,59 +1,56 @@
-@app.route('/')
-def index():
-    return app.send_static_file('frontend/index.html')  # Serves HTML from /static/frontend
-<script>
-    const container = document.getElementById('network');
-    const options = {
-        nodes: { shape: 'dot', scaling: { label: { enabled: true } } },
-        edges: { arrows: 'to', smooth: { type: 'continuous' } },
-        interaction: { zoomView: true, dragView: true }
-    };
-    let network = new vis.Network(container, {}, options);
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Polarity & Maturity Model</title>
+    <script src="https://unpkg.com/vis-network@9.1.2/standalone/umd/vis-network.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #graph { width: 100%; height: 400px; border: 1px solid #ccc; }
+        textarea { width: 100%; height: 100px; margin: 10px 0; }
+        button { padding: 10px 20px; }
+    </style>
+</head>
+<body>
+    <h1>Polarity & Maturity Model</h1>
+    <textarea id="prompt" placeholder="Enter prompt, e.g., 'Add shadow polarity between AI Startup (Victim, Adapted Child, mat 2) and Ethics Board (Persecutor, Controlling Parent, mat 3)'"></textarea>
+    <button onclick="submitPrompt()">Submit</button>
+    <div id="graph"></div>
 
-    // Zoom slider for fractal scales
-    const zoomSlider = document.createElement('input');
-    zoomSlider.type = 'range';
-    zoomSlider.min = '0.2';
-    zoomSlider.max = '2';
-    zoomSlider.step = '0.1';
-    zoomSlider.value = '1';
-    zoomSlider.style.width = '200px';
-    document.body.appendChild(zoomSlider);
-    zoomSlider.addEventListener('input', () => {
-        network.setOptions({ interaction: { zoomSpeed: zoomSlider.value } });
-        network.fit();
-    });
-
-    document.getElementById('inputForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const prompt = document.getElementById('prompt').value;
-        const response = await fetch('http://localhost:5000/add', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt })
-        });
-        const graphData = await response.json();
-        const visData = {
-            nodes: graphData.nodes.map(n => ({
-                id: n.id,
-                label: `${n.attributes.name}\n${n.attributes.role} (${n.attributes.ego_state})\nMat: ${n.attributes.maturity}`,
-                title: `History: ${n.attributes.history || 'None'}`,
-                size: n.attributes.maturity * 5,
-                color: n.attributes.metacognition ? '#FFD700' : '#1E90FF' // Gold for meta
-            })),
-            edges: graphData.links.map(l => ({
-                from: l.source,
-                to: l.target,
-                label: `${l.polarity.toFixed(1)} (${l.light_shadow}, ${l.role})`,
-                title: l.description,
-                color: { 
-                    color: l.consent ? 'green' : (l.polarity > 0 ? (l.light_shadow === 'light' ? '#32CD32' : 'orange') : 'red'),
-                    highlight: 'purple'
-                },
-                dashes: l.light_shadow === 'shadow',
-                width: l.consent ? 3 : 1
-            }))
+    <script>
+        const container = document.getElementById('graph');
+        const data = { nodes: new vis.DataSet([]), edges: new vis.DataSet([]) };
+        const options = {
+            nodes: { shape: 'dot', size: 20, font: { size: 14 } },
+            edges: { arrows: 'to', font: { size: 12 } },
+            physics: { enabled: true }
         };
-        network.setData(visData);
-    });
-</script>
+        const network = new vis.Network(container, data, options);
+
+        async function submitPrompt() {
+            const prompt = document.getElementById('prompt').value;
+            try {
+                const response = await fetch('/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt })
+                });
+                const graph = await response.json();
+                data.nodes.update(graph.nodes.map(node => ({
+                    id: node.id,
+                    label: `${node.attributes.name} (${node.attributes.role}, ${node.attributes.ego_state}, mat ${node.attributes.maturity})`
+                })));
+                data.edges.update(graph.links.map(edge => ({
+                    from: edge.source,
+                    to: edge.target,
+                    label: `${edge.attributes.role} (${edge.attributes.light_shadow}, ${edge.attributes.polarity})`
+                })));
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to add to model');
+            }
+        }
+    </script>
+</body>
+</html>
