@@ -10,9 +10,9 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-# Set static folder to project_root/static
+# Set static folder to match repo structure
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-STATIC_DIR = os.path.join(PROJECT_ROOT, 'static')
+STATIC_DIR = os.path.join(PROJECT_ROOT, 'frontend', 'static')
 app = Flask(__name__, static_folder=STATIC_DIR)
 logger.debug(f"Project root: {PROJECT_ROOT}, Static folder: {STATIC_DIR}")
 
@@ -155,12 +155,12 @@ def add_to_model():
 @app.route('/')
 def index():
     try:
-        file_path = os.path.join(app.static_folder, 'frontend', 'index.html')
+        file_path = os.path.join(app.static_folder, 'index.html')
         logger.debug(f"Attempting to serve {file_path}")
         if not os.path.exists(file_path):
             logger.error(f"File not found: {file_path}")
             return jsonify({"error": f"File not found: {file_path}"}), 404
-        return send_from_directory('frontend', 'index.html')
+        return send_from_directory('', 'index.html')
     except Exception as e:
         logger.error(f"Error serving index.html: {str(e)}")
         return jsonify({"error": f"Failed to serve index.html: {str(e)}"}), 500
