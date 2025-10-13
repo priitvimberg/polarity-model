@@ -10,10 +10,8 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-# Set static folder to absolute path
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-STATIC_DIR = os.path.join(os.path.dirname(BASE_DIR), 'static')  # Points to project_root/static
-app = Flask(__name__, static_folder=STATIC_DIR)
+# Set static folder to project_root/static
+app = Flask(__name__, static_folder='static')
 
 # Database setup
 def init_db():
@@ -164,13 +162,18 @@ def index():
         logger.error(f"Error serving index.html: {str(e)}")
         return jsonify({"error": f"Failed to serve index.html: {str(e)}"}), 500
 
-# Debug route to list static folder contents
 @app.route('/debug/files')
 def debug_files():
     try:
-        files = os.listdir(app.static_folder)
-        logger.debug(f"Static folder contents: {files}")
-        return jsonify({"static_folder": app.static_folder, "files": files})
+        def list_files(startpath):
+            file_tree = {}
+            for root, dirs, files in os.walk(startpath):
+                path = root.replace(startpath, '').lstrip('/')
+                file_tree[path or '.'] = files
+            return file_tree
+        static_files = list_files(app.static_folder)
+        logger.debug(f"Static folder contents: {static_files}")
+        return jsonify({"static_folder": app.static_folder, "files": static_files})
     except Exception as e:
         logger.error(f"Error listing static folder: {str(e)}")
         return jsonify({"error": f"Error listing static folder: {str(e)}"}), 500
