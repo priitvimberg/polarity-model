@@ -63,7 +63,6 @@ def interpret_input_with_grok(user_prompt):
         logger.debug(f"Grok API response status: {response.status_code}, body: {response.text[:200]}...")
         if response.status_code == 200:
             try:
-                # Parse the inner JSON string from choices[0]['message']['content']
                 content = response.json()['choices'][0]['message']['content']
                 return json.loads(content)
             except (json.JSONDecodeError, KeyError) as e:
@@ -178,6 +177,21 @@ def add_to_model():
     except Exception as e:
         logger.error(f"Error in add_to_model: {str(e)}")
         return jsonify({"error": f"Error in add_to_model: {str(e)}"}), 500
+
+@app.route('/reset', methods=['POST'])
+def reset_model():
+    try:
+        conn = sqlite3.connect('model.db')
+        c = conn.cursor()
+        c.execute("DELETE FROM nodes")
+        c.execute("DELETE FROM edges")
+        conn.commit()
+        conn.close()
+        logger.debug("Database reset: nodes and edges tables cleared")
+        return jsonify({"message": "Model reset successfully"})
+    except Exception as e:
+        logger.error(f"Error resetting model: {str(e)}")
+        return jsonify({"error": f"Error resetting model: {str(e)}"}), 500
 
 @app.route('/')
 def index():
