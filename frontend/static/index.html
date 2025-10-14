@@ -1,113 +1,192 @@
 <!DOCTYPE html>
-     <html lang="en">
-     <head>
-         <meta charset="UTF-8">
-         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-         <title>Polarity & Maturity Model</title>
-         <script src="https://unpkg.com/vis-network@9.1.2/standalone/umd/vis-network.min.js"></script>
-         <style>
-             body { font-family: Arial, sans-serif; margin: 20px; }
-             #graph { width: 100%; height: 400px; border: 1px solid #ccc; }
-             textarea { width: 100%; height: 100px; margin: 10px 0; }
-             button { padding: 10px 20px; margin-right: 10px; }
-             .spinner {
-                 display: none;
-                 border: 4px solid #f3f3f3;
-                 border-top: 4px solid #3498db;
-                 border-radius: 50%;
-                 width: 30px;
-                 height: 30px;
-                 animation: spin 1s linear infinite;
-                 margin: 10px auto;
-             }
-             @keyframes spin {
-                 0% { transform: rotate(0deg); }
-                 100% { transform: rotate(360deg); }
-             }
-         </style>
-     </head>
-     <body>
-         <h1>Polarity & Maturity Model</h1>
-         <textarea id="prompt" placeholder="Enter prompt, e.g., 'Add shadow polarity between AI Startup (Victim, Adapted Child, mat 2) and Ethics Board (Persecutor, Controlling Parent, mat 3)'"></textarea>
-         <button id="submitBtn" onclick="submitPrompt()">Submit</button>
-         <button id="resetBtn" onclick="resetModel()">Reset</button>
-         <div id="spinner" class="spinner"></div>
-         <div id="graph"></div>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Polarity & Maturity Model</title>
+  <!-- Bootstrap CSS for tooltips and modal -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Vis.js CSS -->
+  <link href="https://unpkg.com/vis-network@9.1.2/dist/vis-network.min.css" rel="stylesheet">
+  <!-- Custom Styles -->
+  <style>
+    body.light { background-color: #ffffff; color: #000000; }
+    body.dark { background-color: #1e1e1e; color: #ffffff; }
+    .dark #network { background-color: #2c2c2c; }
+    #network { width: 100%; height: 600px; border: 1px solid #ccc; }
+    #spinner { display: none; text-align: center; padding: 20px; }
+  </style>
+</head>
+<body class="light">
+  <div class="container mt-4">
+    <h1>Polarity & Maturity Model</h1>
+    <!-- Theme Toggle -->
+    <div class="form-check form-switch mb-3">
+      <input class="form-check-input" type="checkbox" id="themeToggle" onchange="toggleTheme()">
+      <label class="form-check-label" for="themeToggle">Dark Mode</label>
+    </div>
+    <!-- Form -->
+    <form id="prompt-form">
+      <div class="mb-3">
+        <label for="example-select" class="form-label">Load Example</label>
+        <select class="form-select" id="example-select" onchange="loadExample()">
+          <option value="">Select an example</option>
+          <option value="Stability vs. Change at maturity level 2">Stability vs. Change</option>
+          <option value="Individual vs. Team at maturity level 4">Individual vs. Team</option>
+          <option value="Centralization vs. Decentralization at maturity level 3">Centralization vs. Decentralization</option>
+        </select>
+      </div>
+      <div class="mb-3">
+        <label for="prompt" class="form-label">Enter Polarity Prompt</label>
+        <textarea class="form-control" id="prompt" rows="4" placeholder="e.g., Stability vs. Change at maturity level 3"
+          data-bs-toggle="tooltip" data-bs-placement="top"
+          title="Enter two poles (e.g., Stability vs. Change) and a maturity level (1-5, initial to optimizing)."></textarea>
+      </div>
+      <button type="submit" class="btn btn-primary">Submit</button>
+      <button type="button" class="btn btn-secondary" onclick="resetForm()">Reset</button>
+      <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#helpModal">Help</button>
+      <button type="button" class="btn btn-primary" onclick="downloadGraph()">Download Graph as PNG</button>
+    </form>
+    <!-- Alert Placeholder -->
+    <div id="alert-placeholder" class="mt-3"></div>
+    <!-- Spinner -->
+    <div id="spinner">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+    </div>
+    <!-- Graph Container -->
+    <div id="network"></div>
+    <!-- Help Modal -->
+    <div class="modal fade" id="helpModal" tabindex="-1" aria-labelledby="helpModalLabel" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="helpModalLabel">About Polarity & Maturity Model</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <p>This app visualizes polarities (ongoing dilemmas like 'Individual vs. Team') across maturity stages (1: Initial, 5: Optimizing).</p>
+            <p>Enter a prompt like 'Stability vs. Change at maturity level 3' to see a graph of how poles interact at different maturity levels.</p>
+            <p>Inspired by Barry Johnson's Polarity Management and models like CMMI.</p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
-         <script>
-             const container = document.getElementById('graph');
-             const data = { nodes: new vis.DataSet([]), edges: new vis.DataSet([]) };
-             const options = {
-                 nodes: { shape: 'dot', size: 20, font: { size: 14 } },
-                 edges: { arrows: 'to', font: { size: 12 } },
-                 physics: { enabled: true }
-             };
-             const network = new vis.Network(container, data, options);
+  <!-- Scripts -->
+  <script src="https://unpkg.com/vis-network@9.1.2/dist/vis-network.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    // Initialize tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(function (tooltipTriggerEl) {
+      return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
 
-             // Clear graph on page load
-             data.nodes.clear();
-             data.edges.clear();
+    // Theme toggle
+    function toggleTheme() {
+      var body = document.body;
+      body.classList.toggle('dark');
+      body.classList.toggle('light');
+      localStorage.setItem('theme', body.classList.contains('dark') ? 'dark' : 'light');
+      if (window.network) {
+        window.network.setOptions({ nodes: { font: { color: body.classList.contains('dark') ? '#ffffff' : '#000000' } } });
+      }
+    }
+    document.addEventListener('DOMContentLoaded', () => {
+      if (localStorage.getItem('theme') === 'dark') {
+        document.body.classList.add('dark');
+        document.getElementById('themeToggle').checked = true;
+      } else {
+        document.body.classList.add('light');
+      }
+    });
 
-             async function submitPrompt() {
-                 const prompt = document.getElementById('prompt').value;
-                 const submitBtn = document.getElementById('submitBtn');
-                 const spinner = document.getElementById('spinner');
-                 try {
-                     spinner.style.display = 'block';
-                     submitBtn.disabled = true;
-                     const response = await fetch('/add', {
-                         method: 'POST',
-                         headers: { 'Content-Type': 'application/json' },
-                         body: JSON.stringify({ prompt })
-                     });
-                     if (!response.ok) {
-                         throw new Error(`HTTP error! Status: ${response.status}`);
-                     }
-                     const graph = await response.json();
-                     data.nodes.clear();
-                     data.edges.clear();
-                     data.nodes.update(graph.nodes.map(node => ({
-                         id: node.id,
-                         label: `${node.name} (${node.role}, ${node.ego_state}, mat ${node.maturity})`
-                     })));
-                     data.edges.update(graph.links.map(edge => ({
-                         from: edge.source,
-                         to: edge.target,
-                         label: `${edge.role} (${edge.light_shadow}, ${edge.polarity})`
-                     })));
-                 } catch (error) {
-                     console.error('Error:', error);
-                     alert('Failed to add to model');
-                 } finally {
-                     spinner.style.display = 'none';
-                     submitBtn.disabled = false;
-                 }
-             }
+    // Load example
+    function loadExample() {
+      var select = document.getElementById('example-select');
+      var prompt = document.getElementById('prompt');
+      prompt.value = select.value;
+    }
 
-             async function resetModel() {
-                 const resetBtn = document.getElementById('resetBtn');
-                 const spinner = document.getElementById('spinner');
-                 try {
-                     spinner.style.display = 'block';
-                     resetBtn.disabled = true;
-                     const response = await fetch('/reset', {
-                         method: 'POST',
-                         headers: { 'Content-Type': 'application/json' }
-                     });
-                     if (!response.ok) {
-                         throw new Error(`HTTP error! Status: ${response.status}`);
-                     }
-                     data.nodes.clear();
-                     data.edges.clear();
-                     document.getElementById('prompt').value = '';
-                 } catch (error) {
-                     console.error('Error:', error);
-                     alert('Failed to reset model');
-                 } finally {
-                     spinner.style.display = 'none';
-                     resetBtn.disabled = false;
-                 }
-             }
-         </script>
-     </body>
-     </html>
+    // Form submission
+    document.getElementById('prompt-form').addEventListener('submit', function(e) {
+      e.preventDefault();
+      var prompt = document.getElementById('prompt').value;
+      if (!prompt.trim()) {
+        document.getElementById('alert-placeholder').innerHTML =
+          '<div class="alert alert-warning alert-dismissible fade show" role="alert">' +
+          'Please enter a polarity prompt.' +
+          '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>';
+        return;
+      }
+      document.getElementById('spinner').style.display = 'block';
+      fetch('/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: prompt })
+      })
+      .then(response => {
+        if (!response.ok) throw new Error('Invalid input');
+        return response.json();
+      })
+      .then(data => {
+        document.getElementById('spinner').style.display = 'none';
+        document.getElementById('alert-placeholder').innerHTML =
+          '<div class="alert alert-success alert-dismissible fade show" role="alert">' +
+          'Graph generated successfully!' +
+          '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>';
+        var nodes = new vis.DataSet(data.nodes);
+        var edges = new vis.DataSet(data.edges);
+        var container = document.getElementById('network');
+        window.network = new vis.Network(container, { nodes: nodes, edges: edges }, {
+          nodes: { font: { color: document.body.classList.contains('dark') ? '#ffffff' : '#000000' } }
+        });
+      })
+      .catch(error => {
+        document.getElementById('spinner').style.display = 'none';
+        document.getElementById('alert-placeholder').innerHTML =
+          '<div class="alert alert-danger alert-dismissible fade show" role="alert">' +
+          'Error generating graph. Please try again.' +
+          '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>';
+      });
+    });
+
+    // Reset form
+    function resetForm() {
+      fetch('/reset', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+          document.getElementById('prompt').value = '';
+          document.getElementById('example-select').value = '';
+          document.getElementById('network').innerHTML = '';
+          document.getElementById('alert-placeholder').innerHTML =
+            '<div class="alert alert-info alert-dismissible fade show" role="alert">' +
+            'Form and graph reset.' +
+            '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>';
+        });
+    }
+
+    // Download graph
+    function downloadGraph() {
+      var network = document.getElementById('network').querySelector('canvas');
+      if (network) {
+        var link = document.createElement('a');
+        link.download = 'polarity_maturity_graph.png';
+        link.href = network.toDataURL('image/png');
+        link.click();
+      } else {
+        document.getElementById('alert-placeholder').innerHTML =
+          '<div class="alert alert-warning alert-dismissible fade show" role="alert">' +
+          'No graph to download. Generate a graph first.' +
+          '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>';
+      }
+    }
+  </script>
+</body>
+</html>
