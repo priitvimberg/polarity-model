@@ -10,12 +10,27 @@
         #graph { width: 100%; height: 400px; border: 1px solid #ccc; }
         textarea { width: 100%; height: 100px; margin: 10px 0; }
         button { padding: 10px 20px; }
+        .spinner {
+            display: none;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 10px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
     <h1>Polarity & Maturity Model</h1>
     <textarea id="prompt" placeholder="Enter prompt, e.g., 'Add shadow polarity between AI Startup (Victim, Adapted Child, mat 2) and Ethics Board (Persecutor, Controlling Parent, mat 3)'"></textarea>
-    <button onclick="submitPrompt()">Submit</button>
+    <button id="submitBtn" onclick="submitPrompt()">Submit</button>
+    <div id="spinner" class="spinner"></div>
     <div id="graph"></div>
 
     <script>
@@ -28,9 +43,18 @@
         };
         const network = new vis.Network(container, data, options);
 
+        // Clear graph on page load
+        data.nodes.clear();
+        data.edges.clear();
+
         async function submitPrompt() {
             const prompt = document.getElementById('prompt').value;
+            const submitBtn = document.getElementById('submitBtn');
+            const spinner = document.getElementById('spinner');
             try {
+                // Show spinner, disable button
+                spinner.style.display = 'block';
+                submitBtn.disabled = true;
                 const response = await fetch('/add', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -40,8 +64,10 @@
                     throw new Error(`HTTP error! Status: ${response.status}`);
                 }
                 const graph = await response.json();
+                // Clear old graph data
                 data.nodes.clear();
                 data.edges.clear();
+                // Update with new data
                 data.nodes.update(graph.nodes.map(node => ({
                     id: node.id,
                     label: `${node.name} (${node.role}, ${node.ego_state}, mat ${node.maturity})`
@@ -54,6 +80,10 @@
             } catch (error) {
                 console.error('Error:', error);
                 alert('Failed to add to model');
+            } finally {
+                // Hide spinner, enable button
+                spinner.style.display = 'none';
+                submitBtn.disabled = false;
             }
         }
     </script>
