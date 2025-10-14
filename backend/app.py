@@ -63,10 +63,12 @@ def interpret_input_with_grok(user_prompt):
         logger.debug(f"Grok API response status: {response.status_code}, body: {response.text[:200]}...")
         if response.status_code == 200:
             try:
-                return json.loads(response.text)
-            except json.JSONDecodeError as e:
-                logger.error(f"JSON decode error: {str(e)}, response: {response.text[:200]}")
-                return {"error": f"JSON decode error: {str(e)}"}
+                # Parse the inner JSON string from choices[0]['message']['content']
+                content = response.json()['choices'][0]['message']['content']
+                return json.loads(content)
+            except (json.JSONDecodeError, KeyError) as e:
+                logger.error(f"JSON decode or KeyError: {str(e)}, response: {response.text[:200]}")
+                return {"error": f"JSON decode or KeyError: {str(e)}"}
         logger.error(f"API call failed: {response.status_code}, body: {response.text[:200]}")
         return {"error": f"API call failed: {response.status_code}"}
     except Exception as e:
@@ -211,6 +213,4 @@ def debug_files():
         return jsonify({"error": f"Error listing project root: {str(e)}"}), 500
 
 if __name__ == '__main__':
-    import sys
-    port = int(sys.argv[sys.argv.index('--port') + 1]) if '--port' in sys.argv else int(os.environ.get('PORT', 5000))
-    app.run(debug=True, host='0.0.0.0', port=port)
+    app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
