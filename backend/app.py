@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 STATIC_DIR = os.path.join(PROJECT_ROOT, 'frontend', 'static')
 app = Flask(__name__, static_folder=STATIC_DIR)
-CORS(app)  # Enable CORS
+CORS(app)
 logger.debug(f"Project root: {PROJECT_ROOT}, Static folder: {STATIC_DIR}")
 
 # Database setup
@@ -211,4 +211,6 @@ def debug_files():
         return jsonify({"error": f"Error listing project root: {str(e)}"}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+    import sys
+    port = int(sys.argv[sys.argv.index('--port') + 1]) if '--port' in sys.argv else int(os.environ.get('PORT', 5000))
+    app.run(debug=True, host='0.0.0.0', port=port)
