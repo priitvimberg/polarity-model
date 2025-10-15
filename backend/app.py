@@ -7,6 +7,7 @@ import json
 import jinja2
 
 app = Flask(__name__, template_folder='templates')
+app.jinja_env.cache = {}  # Disable Jinja2 cache
 CORS(app)
 
 # Debug template folder
@@ -91,10 +92,15 @@ def process_response(api_response, prompt_data):
 def home():
     try:
         print(f"DEBUG: Attempting to load template: index.html")
-        return render_template('index.html', nodes=[], edges=[])
+        template = app.jinja_env.get_template('index.html')
+        print(f"DEBUG: Template loaded successfully: {template.name}")
+        return template.render(nodes=[], edges=[])
     except jinja2.exceptions.TemplateNotFound as e:
         print(f"ERROR: TemplateNotFound: {str(e)}")
         return jsonify({'error': f"Template not found: {str(e)}"}), 500
+    except Exception as e:
+        print(f"ERROR: Unexpected error loading template: {str(e)}")
+        return jsonify({'error': f"Unexpected error: {str(e)}"}), 500
 
 @app.route('/add', methods=['POST'])
 def add_prompt():
