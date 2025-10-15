@@ -68,7 +68,6 @@
           <div class="modal-body">
             <p>This app visualizes polarities (ongoing dilemmas like 'Individual vs. Team') across maturity stages (1: Initial, 5: Optimizing).</p>
             <p>Enter a prompt like 'Stability vs. Change at maturity level 3' to see a graph of how poles interact at different maturity levels.</p>
-            <p>Inspired by Barry Johnson's Polarity Management and models like CMMI.</p>
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
@@ -114,7 +113,7 @@
       prompt.value = select.value;
     }
 
-    // Form submission with increased timeout
+    // Form submission
     document.getElementById('prompt-form').addEventListener('submit', function(e) {
       e.preventDefault();
       var prompt = document.getElementById('prompt').value;
@@ -129,8 +128,7 @@
       fetch('/add', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: prompt }),
-        timeout: 60000  // Increase to 60s to avoid browser timeout
+        body: JSON.stringify({ prompt: prompt })
       })
       .then(response => {
         if (!response.ok) {
