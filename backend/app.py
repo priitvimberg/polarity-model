@@ -20,31 +20,55 @@ def init_db():
 
 init_db()
 
-# xAI API call (simplified, replace with your actual implementation including DEBUG logs)
+# xAI API call with stronger system prompt for JSON only
 def xai_api_call(prompt):
     api_key = os.environ.get('API_KEY')
     if not api_key:
         raise ValueError("API_KEY not set")
     headers = {'Authorization': f'Bearer {api_key}'}
-    # Add your DEBUG: print(f"DEBUG:__main__:Sending request to Grok API with prompt: {prompt[:50]}...")
-    response = requests.post('https://api.x.ai/v1/chat/completions', json={'prompt': prompt}, headers=headers)  # Updated endpoint based on your logs
-    # Add your DEBUG: print(f"DEBUG:urllib3.connectionpool:{response.request.method} ...")
+    payload = {
+        'model': 'grok-4-0709',
+        'messages': [
+            {'role': 'system', 'content': 'You are an assistant that provides structured JSON output for polarity and maturity model graphs. Return ONLY a JSON object with "nodes" (array of {id, name, maturity, ego_state, role, metacognition, history}) and "edges" (array of {source, target, polarity, light_shadow, role, consent, description}). No other text, explanation, or formatting.'},
+            {'role': 'user', 'content': prompt}
+        ]
+    }
+    print(f"DEBUG: Sending request to Grok API with payload: {json.dumps(payload)[:100]}...")
+    response = requests.post('https://api.x.ai/v1/chat/completions', json=payload, headers=headers, timeout=60)  # Increased timeout
+    print(f"DEBUG: Grok API response status: {response.status_code}, body: {response.text[:200]}...")
     response.raise_for_status()
-    # Add your DEBUG: print(f"DEBUG:__main__:Grok API response status: {response.status_code}, body: {response.text[:50]}...")
     return response.json()
 
-# Process API response to generate nodes and edges (simplified example, add your interpretation logic)
+# Process API response with fallback
 def process_response(api_response):
-    # Example: Parse response to create Vis.js-compatible nodes and edges
-    # Replace with your actual logic, including DEBUG prints for 'Interpreted response', 'Graph data', etc.
-    nodes = [
-        {'id': 1, 'label': 'Pole 1', 'maturity': 1, 'ego_state': 'Adapted Child', 'role': 'Victim'},
-        {'id': 2, 'label': 'Pole 2', 'maturity': 2, 'ego_state': 'Controlling Parent', 'role': 'Persecutor'}
-    ]
-    edges = [
-        {'from': 1, 'to': 2, 'polarity': 0.8, 'light_shadow': 'shadow'}
-    ]
-    return nodes, edges
+    try:
+        content = api_response['choices'][0]['message']['content']
+        print(f"DEBUG: Interpreted response: {content[:200]}...")
+        try:
+            parsed = json.loads(content)
+            nodes = parsed.get('nodes', [])
+            edges = parsed.get('edges', [])
+            if not nodes or not edges:
+                raise ValueError("Empty nodes or edges in parsed response")
+        except json.JSONDecodeError:
+            print("DEBUG: API returned non-JSON response, using fallback graph")
+            nodes = [
+                {'id': 1, 'name': 'Pole 1', 'maturity': 1, 'ego_state': 'Adapted Child', 'role': 'Victim', 'metacognition': False, 'history': ''},
+                {'id': 2, 'name': 'Pole 2', 'maturity': 2, 'ego_state': 'Controlling Parent', 'role': 'Persecutor', 'metacognition': False, 'history': ''}
+            ]
+            edges = [{'source': 1, 'target': 2, 'polarity': 0.5, 'light_shadow': 'shadow', 'role': 'Victim-Persecutor', 'consent': False, 'description': 'Fallback edge'}]
+        print(f"DEBUG: Graph data: {json.dumps({'nodes': nodes, 'edges': edges})[:200]}...")
+        return nodes, edges
+    except KeyError as e:
+        raise ValueError(f"Invalid API response structure: {str(e)}")
+    except Exception as e:
+        print(f"DEBUG: Error processing response, using fallback: {str(e)}")
+        nodes = [
+            {'id': 1, 'name': 'Pole 1', 'maturity': 1, 'ego_state': 'Adapted Child', 'role': 'Victim', 'metacognition': False, 'history': ''},
+            {'id': 2, 'name': 'Pole 2', 'maturity': 2, 'ego_state': 'Controlling Parent', 'role': 'Persecutor', 'metacognition': False, 'history': ''}
+        ]
+        edges = [{'source': 1, 'target': 2, 'polarity': 0.5, 'light_shadow': 'shadow', 'role': 'Victim-Persecutor', 'consent': False, 'description': 'Fallback edge'}]
+        return nodes, edges
 
 @app.route('/', methods=['GET'])
 def home():
@@ -57,10 +81,8 @@ def add_prompt():
     if not prompt.strip():
         return jsonify({'error': 'Prompt is required'}), 400
     try:
-        # Call xAI API
         api_response = xai_api_call(prompt)
         nodes, edges = process_response(api_response)
-        # Store in database
         with sqlite3.connect(DB_PATH) as conn:
             c = conn.cursor()
             c.execute('INSERT INTO prompts (prompt, nodes, edges) VALUES (?, ?, ?)',
@@ -68,6 +90,7 @@ def add_prompt():
             conn.commit()
         return jsonify({'nodes': nodes, 'edges': edges})
     except Exception as e:
+        print(f"ERROR: Exception in /add: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/reset', methods=['POST'])
@@ -79,6 +102,7 @@ def reset():
             conn.commit()
         return jsonify({'status': 'Database reset'})
     except Exception as e:
+        print(f"ERROR: Exception in /reset: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
