@@ -4,9 +4,15 @@ import sqlite3
 import os
 import requests
 import json
+import jinja2
 
 app = Flask(__name__, template_folder='templates')
 CORS(app)
+
+# Debug template folder
+print(f"DEBUG: Flask template_folder set to: {app.template_folder}")
+print(f"DEBUG: Absolute template path: {os.path.abspath(app.template_folder)}")
+print(f"DEBUG: index.html exists: {os.path.exists(os.path.join(app.template_folder, 'index.html'))}")
 
 # Database setup
 DB_PATH = 'model.db'
@@ -83,7 +89,12 @@ def process_response(api_response, prompt_data):
 
 @app.route('/', methods=['GET'])
 def home():
-    return render_template('index.html', nodes=[], edges=[])
+    try:
+        print(f"DEBUG: Attempting to load template: index.html")
+        return render_template('index.html', nodes=[], edges=[])
+    except jinja2.exceptions.TemplateNotFound as e:
+        print(f"ERROR: TemplateNotFound: {str(e)}")
+        return jsonify({'error': f"Template not found: {str(e)}"}), 500
 
 @app.route('/add', methods=['POST'])
 def add_prompt():
