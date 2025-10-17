@@ -4,17 +4,10 @@ import sqlite3
 import os
 import requests
 import json
-from jinja2 import FileSystemLoader, Environment
+import jinja2
 
-app = Flask(__name__)
-app.jinja_loader = FileSystemLoader('templates')
-app.jinja_env.cache = {}
+app = Flask(__name__, template_folder='templates')
 CORS(app)
-
-# Debug template folder
-print(f"DEBUG: Flask template_folder set to: templates")
-print(f"DEBUG: Absolute template path: {os.path.abspath('templates')}")
-print(f"DEBUG: index.html exists: {os.path.exists(os.path.join('templates', 'index.html'))}")
 
 # Database setup
 DB_PATH = 'model.db'
@@ -65,6 +58,9 @@ def process_response(api_response, prompt_data):
         edges = parsed.get('edges', [])
         if not nodes or len(nodes) < 2:
             raise ValueError("Insufficient nodes in response")
+        # Filter to two nodes and one edge
+        nodes = nodes[:2]
+        edges = edges[:1]
         if not edges:
             print("DEBUG: No edges in API response, using fallback edge")
             edges = [{
@@ -78,19 +74,22 @@ def process_response(api_response, prompt_data):
                 'description': 'Tension flip to light',
                 'role_flip': 'Victim to Creator'
             }]
-        # Apply user inputs
+        # Apply user inputs and ensure numeric IDs
+        nodes[0]['id'] = 1
         nodes[0]['label'] = prompt_data.get('pole1Name', 'Pole 1')
         nodes[0]['maturity'] = max(1, min(5, prompt_data.get('pole1Maturity', 3)))
+        nodes[1]['id'] = 2
         nodes[1]['label'] = prompt_data.get('pole2Name', 'Pole 2')
         nodes[1]['maturity'] = max(1, min(5, prompt_data.get('pole2Maturity', 3)))
         for edge in edges:
             edge['from'] = 1
             edge['to'] = 2
-            edge['label'] = str(prompt_data.get('polarityWeight', edge.get('polarity', 0.5)))
-            edge['polarity'] = max(-1.0, min(1.0, prompt_data.get('polarityWeight', edge.get('polarity', 0.5))))
+            edge['label'] = str(edge.get('polarity', prompt_data.get('polarityWeight', 0.5)))
+            edge['polarity'] = max(-1.0, min(1.0, edge.get('polarity', prompt_data.get('polarityWeight', 0.5))))
             edge['consent'] = prompt_data.get('consent', edge.get('consent', 0))
             edge['metacognition'] = prompt_data.get('metacognition', edge.get('metacognition', 0))
-        print(f"DEBUG: Graph data: {json.dumps({'nodes': nodes, 'edges': edges})[:200]}...")
+        print(f"DEBUG: Final nodes: {json.dumps(nodes, indent=2)[:200]}...")
+        print(f"DEBUG: Final edges: {json.dumps(edges, indent=2)}")
         return nodes, edges
     except Exception as e:
         print(f"DEBUG: Error processing response, using fallback: {str(e)}")
@@ -101,15 +100,17 @@ def process_response(api_response, prompt_data):
         edges = [{
             'from': 1,
             'to': 2,
-            'label': str(prompt_data.get('polarityWeight', -0.5)),
-            'polarity': max(-1.0, min(1.0, prompt_data.get('polarityWeight', -0.5))),
+            'label': str(prompt_data.get('polarityWeight', 0.5)),
+            'polarity': max(-1.0, min(1.0, prompt_data.get('polarityWeight', 0.5))),
             'light_shadow': 'shadow' if prompt_data.get('polarityWeight', 0) < 0 else 'light',
             'role': 'Victim-Persecutor',
             'consent': prompt_data.get('consent', 0),
+            'metacognition': prompt_data.get('metacognition', 0),
             'description': 'Tension flip to light',
             'role_flip': 'Victim to Creator'
         }]
-        print(f"DEBUG: Fallback graph data: {json.dumps({'nodes': nodes, 'edges': edges})[:200]}...")
+        print(f"DEBUG: Fallback nodes: {json.dumps(nodes, indent=2)[:200]}...")
+        print(f"DEBUG: Fallback edges: {json.dumps(edges, indent=2)}")
         return nodes, edges
 
 @app.route('/', methods=['GET'])

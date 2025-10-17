@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Polarity & Maturity Model</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis-network.min.css" rel="stylesheet">
+  <link href="https://unpkg.com/vis-network@9.1.9/dist/vis-network.min.css" rel="stylesheet">
   <style>
     body.light { background-color: #ffffff; color: #000000; }
     body.dark { background-color: #1e1e1e; color: #ffffff; }
@@ -127,229 +127,264 @@
         </div>
       </div>
     </div>
-  </div>
 
-  <!-- Scripts -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis-network.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-  <script>
-    // Initialize tooltips
-    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    tooltipTriggerList.map(function (tooltipTriggerEl) {
-      return new bootstrap.Tooltip(tooltipTriggerEl);
-    });
+    <!-- Scripts -->
+    <script src="https://unpkg.com/vis-network@9.1.9/dist/vis-network.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        // Initialize tooltips
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.forEach(function (tooltipTriggerEl) {
+          new bootstrap.Tooltip(tooltipTriggerEl);
+        });
 
-    // Theme toggle
-    function toggleTheme() {
-      var body = document.body;
-      body.classList.toggle('dark');
-      body.classList.toggle('light');
-      localStorage.setItem('theme', body.classList.contains('dark') ? 'dark' : 'light');
-      if (window.network) {
-        window.network.setOptions({ nodes: { font: { color: body.classList.contains('dark') ? '#ffffff' : '#000000' } } });
-      }
-    }
-    document.addEventListener('DOMContentLoaded', () => {
-      if (localStorage.getItem('theme') === 'dark') {
-        document.body.classList.add('dark');
-        document.getElementById('themeToggle').checked = true;
-      } else {
-        document.body.classList.add('light');
-      }
-      // Update slider values display
-      document.getElementById('pole1-maturity').addEventListener('input', () => {
-        document.getElementById('pole1-maturity-value').textContent = document.getElementById('pole1-maturity').value;
-      });
-      document.getElementById('pole2-maturity').addEventListener('input', () => {
-        document.getElementById('pole2-maturity-value').textContent = document.getElementById('pole2-maturity').value;
-      });
-      document.getElementById('polarity-weight').addEventListener('input', () => {
-        document.getElementById('polarity-weight-value').textContent = document.getElementById('polarity-weight').value;
-      });
-      // Auto-update on pole name input
-      document.getElementById('pole1-name').addEventListener('input', updateGraphDebounced);
-      document.getElementById('pole2-name').addEventListener('input', updateGraphDebounced);
-    });
+        // Form elements
+        const pole1Name = document.getElementById('pole1-name');
+        const pole2Name = document.getElementById('pole2-name');
+        const pole1Maturity = document.getElementById('pole1-maturity');
+        const pole2Maturity = document.getElementById('pole2-maturity');
+        const polarityWeight = document.getElementById('polarity-weight');
+        const consent = document.getElementById('consent');
+        const metacognition = document.getElementById('metacognition');
+        const exampleSelect = document.getElementById('example-select');
+        const generateBtn = document.getElementById('generate-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const downloadBtn = document.getElementById('download-btn');
 
-    // Debounce function
-    function debounce(func, wait) {
-      let timeout;
-      return function executedFunction(...args) {
-        const later = () => {
-          clearTimeout(timeout);
-          func(...args);
-        };
-        clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
-      };
-    }
+        // Update slider values display
+        pole1Maturity.addEventListener('input', () => {
+          document.getElementById('pole1-maturity-value').textContent = pole1Maturity.value;
+          updateGraphDebounced();
+        });
+        pole2Maturity.addEventListener('input', () => {
+          document.getElementById('pole2-maturity-value').textContent = pole2Maturity.value;
+          updateGraphDebounced();
+        });
+        polarityWeight.addEventListener('input', () => {
+          document.getElementById('polarity-weight-value').textContent = polarityWeight.value;
+          updateGraphDebounced();
+        });
+        pole1Name.addEventListener('input', updateGraphDebounced);
+        pole2Name.addEventListener('input', updateGraphDebounced);
+        exampleSelect.addEventListener('change', loadExample);
+        consent.addEventListener('change', updateGraphDebounced);
+        metacognition.addEventListener('change', updateGraphDebounced);
+        generateBtn.addEventListener('click', updateGraph);
+        resetBtn.addEventListener('click', resetForm);
+        downloadBtn.addEventListener('click', downloadGraph);
 
-    // Load example
-    function loadExample() {
-      var select = document.getElementById('example-select');
-      var pole1Name = document.getElementById('pole1-name');
-      var pole2Name = document.getElementById('pole2-name');
-      var pole1Maturity = document.getElementById('pole1-maturity');
-      var pole2Maturity = document.getElementById('pole2-maturity');
-      var polarityWeight = document.getElementById('polarity-weight');
-      var consent = document.getElementById('consent');
-      var metacognition = document.getElementById('metacognition');
-      if (select.value === 'Stability vs. Change') {
-        pole1Name.value = 'Stability';
-        pole2Name.value = 'Change';
-        pole1Maturity.value = 2;
-        pole2Maturity.value = 2;
-        polarityWeight.value = 0.5;
-        consent.value = 0;
-        metacognition.value = 0;
-      } else if (select.value === 'Individual vs. Team') {
-        pole1Name.value = 'Individual';
-        pole2Name.value = 'Team';
-        pole1Maturity.value = 4;
-        pole2Maturity.value = 4;
-        polarityWeight.value = 0.8;
-        consent.value = 1;
-        metacognition.value = 1;
-      } else if (select.value === 'Centralization vs. Decentralization') {
-        pole1Name.value = 'Centralization';
-        pole2Name.value = 'Decentralization';
-        pole1Maturity.value = 3;
-        pole2Maturity.value = 3;
-        polarityWeight.value = 0.5;
-        consent.value = 0;
-        metacognition.value = 0;
-      } else {
-        pole1Name.value = '';
-        pole2Name.value = '';
-        pole1Maturity.value = 3;
-        pole2Maturity.value = 3;
-        polarityWeight.value = 0.5;
-        consent.value = 0;
-        metacognition.value = 0;
-      }
-      document.getElementById('pole1-maturity-value').textContent = pole1Maturity.value;
-      document.getElementById('pole2-maturity-value').textContent = pole2Maturity.value;
-      document.getElementById('polarity-weight-value').textContent = polarityWeight.value;
-      updateGraph();
-    }
-
-    // Update graph dynamically (debounced)
-    const updateGraphDebounced = debounce(updateGraph, 500);
-    function updateGraph() {
-      var pole1Name = document.getElementById('pole1-name').value;
-      var pole2Name = document.getElementById('pole2-name').value;
-      var pole1Maturity = parseInt(document.getElementById('pole1-maturity').value);
-      var pole2Maturity = parseInt(document.getElementById('pole2-maturity').value);
-      var polarityWeight = parseFloat(document.getElementById('polarity-weight').value);
-      var consent = parseInt(document.getElementById('consent').value);
-      var metacognition = parseInt(document.getElementById('metacognition').value);
-      if (!pole1Name.trim() || !pole2Name.trim()) {
-        document.getElementById('alert-placeholder').innerHTML =
-          '<div class="alert alert-warning alert-dismissible fade show" role="alert">' +
-          'Please enter both pole names.' +
-          '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>';
-        return;
-      }
-      document.getElementById('spinner').style.display = 'block';
-      fetch('/add', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: `${pole1Name} vs. ${pole2Name}`,
-          pole1Name: pole1Name,
-          pole2Name: pole2Name,
-          pole1Maturity: pole1Maturity,
-          pole2Maturity: pole2Maturity,
-          polarityWeight: polarityWeight,
-          consent: consent,
-          metacognition: metacognition
-        })
-      })
-      .then(response => {
-        if (!response.ok) {
-          return response.json().then(errData => { throw errData; });
+        // Theme initialization
+        if (localStorage.getItem('theme') === 'dark') {
+          document.body.classList.add('dark');
+          document.getElementById('themeToggle').checked = true;
+        } else {
+          document.body.classList.add('light');
         }
-        return response.json();
-      })
-      .then(data => {
-        document.getElementById('spinner').style.display = 'none';
-        document.getElementById('alert-placeholder').innerHTML =
-          '<div class="alert alert-success alert-dismissible fade show" role="alert">' +
-          'Graph generated successfully!' +
-          '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>';
-        var nodes = new vis.DataSet(data.nodes.map(node => ({
-          ...node,
-          size: node.maturity * 20,
-          color: {
-            background: `hsl(${node.maturity * 24}, 100%, 50%)`, // Red (1) to green (5)
-            border: '#000000'
-          },
-          font: { size: 16, color: document.body.classList.contains('dark') ? '#ffffff' : '#000000' }
-        })));
-        var edges = new vis.DataSet(data.edges.map(edge => ({
-          ...edge,
-          width: Math.max(1, Math.abs(edge.polarity) * 5), // Ensure minimum width
-          color: edge.polarity >= 0 ? 'green' : 'red',
-          label: edge.label || edge.polarity.toFixed(2),
-          font: { align: 'middle', size: 14, color: document.body.classList.contains('dark') ? '#ffffff' : '#000000' },
-          arrows: 'to',
-          smooth: { enabled: true, type: 'continuous' }
-        })));
-        var container = document.getElementById('network');
-        window.network = new vis.Network(container, { nodes: nodes, edges: edges }, {
-          nodes: { shape: 'circle' },
-          edges: { arrows: 'to', smooth: { enabled: true, type: 'continuous' } },
-          physics: { enabled: true, stabilization: false }
-        });
-      })
-      .catch(error => {
-        document.getElementById('spinner').style.display = 'none';
-        document.getElementById('alert-placeholder').innerHTML =
-          '<div class="alert alert-danger alert-dismissible fade show" role="alert">' +
-          `Error generating graph: ${error.error || error.message || 'Unknown error'}` +
-          '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>';
+
+        // Theme toggle function
+        function toggleTheme() {
+          var body = document.body;
+          body.classList.toggle('dark');
+          body.classList.toggle('light');
+          localStorage.setItem('theme', body.classList.contains('dark') ? 'dark' : 'light');
+          if (window.network) {
+            window.network.setOptions({ 
+              nodes: { font: { color: body.classList.contains('dark') ? '#ffffff' : '#000000' } },
+              edges: { font: { color: body.classList.contains('dark') ? '#ffffff' : '#000000' } }
+            });
+          }
+        }
+
+        document.getElementById('themeToggle').addEventListener('change', toggleTheme);
+
+        // Debounce function
+        function debounce(func, wait) {
+          let timeout;
+          return function executedFunction(...args) {
+            const later = () => {
+              clearTimeout(timeout);
+              func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+          };
+        }
+
+        // Load example
+        function loadExample() {
+          if (exampleSelect.value === 'Stability vs. Change') {
+            pole1Name.value = 'Stability';
+            pole2Name.value = 'Change';
+            pole1Maturity.value = 2;
+            pole2Maturity.value = 2;
+            polarityWeight.value = 0.5;
+            consent.value = 0;
+            metacognition.value = 0;
+          } else if (exampleSelect.value === 'Individual vs. Team') {
+            pole1Name.value = 'Individual';
+            pole2Name.value = 'Team';
+            pole1Maturity.value = 4;
+            pole2Maturity.value = 4;
+            polarityWeight.value = 0.8;
+            consent.value = 1;
+            metacognition.value = 1;
+          } else if (exampleSelect.value === 'Centralization vs. Decentralization') {
+            pole1Name.value = 'Centralization';
+            pole2Name.value = 'Decentralization';
+            pole1Maturity.value = 3;
+            pole2Maturity.value = 3;
+            polarityWeight.value = 0.5;
+            consent.value = 0;
+            metacognition.value = 0;
+          } else {
+            pole1Name.value = '';
+            pole2Name.value = '';
+            pole1Maturity.value = 3;
+            pole2Maturity.value = 3;
+            polarityWeight.value = 0.5;
+            consent.value = 0;
+            metacognition.value = 0;
+          }
+          document.getElementById('pole1-maturity-value').textContent = pole1Maturity.value;
+          document.getElementById('pole2-maturity-value').textContent = pole2Maturity.value;
+          document.getElementById('polarity-weight-value').textContent = polarityWeight.value;
+          updateGraph();
+        }
+
+        // Update graph dynamically (debounced)
+        const updateGraphDebounced = debounce(updateGraph, 500);
+        function updateGraph() {
+          if (!pole1Name.value.trim() || !pole2Name.value.trim()) {
+            document.getElementById('alert-placeholder').innerHTML =
+              '<div class="alert alert-warning alert-dismissible fade show" role="alert">' +
+              'Please enter both pole names.' +
+              '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>';
+            return;
+          }
+          document.getElementById('spinner').style.display = 'block';
+          fetch('/add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              prompt: `${pole1Name.value} vs. ${pole2Name.value}`,
+              pole1Name: pole1Name.value,
+              pole2Name: pole2Name.value,
+              pole1Maturity: parseInt(pole1Maturity.value),
+              pole2Maturity: parseInt(pole2Maturity.value),
+              polarityWeight: parseFloat(polarityWeight.value),
+              consent: parseInt(consent.value),
+              metacognition: parseInt(metacognition.value)
+            })
+          })
+          .then(response => {
+            if (!response.ok) {
+              return response.json().then(errData => { throw errData; });
+            }
+            return response.json();
+          })
+          .then(data => {
+            document.getElementById('spinner').style.display = 'none';
+            document.getElementById('alert-placeholder').innerHTML =
+              '<div class="alert alert-success alert-dismissible fade show" role="alert">' +
+              'Graph generated successfully!' +
+              '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>';
+            console.log('Graph data:', data);
+            try {
+              const nodes = new vis.DataSet(data.nodes.map(node => ({
+                id: node.id,
+                label: node.label,
+                size: node.maturity * 20,
+                color: {
+                  background: `hsl(${node.maturity * 24}, 100%, 50%)`,
+                  border: '#000000'
+                },
+                font: { size: 16, color: document.body.classList.contains('dark') ? '#ffffff' : '#000000' }
+              })));
+              const edges = new vis.DataSet(data.edges.map((edge, index) => ({
+                id: index + 1,
+                from: edge.from,
+                to: edge.to,
+                label: edge.label || edge.polarity.toFixed(2),
+                width: Math.max(2, Math.abs(edge.polarity) * 5),
+                color: { color: edge.polarity >= 0 ? 'green' : 'red' },
+                font: { align: 'middle', size: 14, color: document.body.classList.contains('dark') ? '#ffffff' : '#000000' },
+                arrows: { to: { enabled: true, type: 'arrow' } },
+                smooth: { enabled: true, type: 'continuous' }
+              })));
+              const container = document.getElementById('network');
+              window.network = new vis.Network(container, { nodes: nodes, edges: edges }, {
+                nodes: { shape: 'circle', physics: true },
+                edges: { 
+                  arrows: { to: { enabled: true, type: 'arrow' } }, 
+                  smooth: { enabled: true, type: 'continuous' },
+                  physics: true
+                },
+                physics: { 
+                  enabled: true, 
+                  stabilization: { enabled: true, iterations: 100 },
+                  barnesHut: { gravitationalConstant: -2000, springLength: 150 }
+                },
+                layout: { improvedLayout: true }
+              });
+            } catch (err) {
+              console.error('Vis.js initialization error:', err);
+              document.getElementById('alert-placeholder').innerHTML =
+                '<div class="alert alert-danger alert-dismissible fade show" role="alert">' +
+                `Failed to render graph: ${err.message}` +
+                '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>';
+            }
+          })
+          .catch(error => {
+            document.getElementById('spinner').style.display = 'none';
+            document.getElementById('alert-placeholder').innerHTML =
+              '<div class="alert alert-danger alert-dismissible fade show" role="alert">' +
+              `Error generating graph: ${error.error || error.message || 'Unknown error'}` +
+              '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>';
+            console.error('Fetch error:', error);
+          });
+        }
+
+        // Reset form
+        function resetForm() {
+          fetch('/reset', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+              pole1Name.value = '';
+              pole2Name.value = '';
+              exampleSelect.value = '';
+              pole1Maturity.value = 3;
+              pole2Maturity.value = 3;
+              polarityWeight.value = 0.5;
+              consent.value = 0;
+              metacognition.value = 0;
+              document.getElementById('pole1-maturity-value').textContent = '3';
+              document.getElementById('pole2-maturity-value').textContent = '3';
+              document.getElementById('polarity-weight-value').textContent = '0.5';
+              document.getElementById('network').innerHTML = '';
+              document.getElementById('alert-placeholder').innerHTML =
+                '<div class="alert alert-info alert-dismissible fade show" role="alert">' +
+                'Form and graph reset.' +
+                '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>';
+            });
+        }
+
+        // Download graph
+        function downloadGraph() {
+          const network = document.getElementById('network').querySelector('canvas');
+          if (network) {
+            const link = document.createElement('a');
+            link.download = 'polarity_maturity_graph.png';
+            link.href = network.toDataURL('image/png');
+            link.click();
+          } else {
+            document.getElementById('alert-placeholder').innerHTML =
+              '<div class="alert alert-warning alert-dismissible fade show" role="alert">' +
+              'No graph to download. Generate a graph first.' +
+              '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>';
+          }
+        }
       });
-    }
-
-    // Reset form
-    function resetForm() {
-      fetch('/reset', { method: 'POST' })
-        .then(response => response.json())
-        .then(data => {
-          document.getElementById('pole1-name').value = '';
-          document.getElementById('pole2-name').value = '';
-          document.getElementById('example-select').value = '';
-          document.getElementById('pole1-maturity').value = 3;
-          document.getElementById('pole2-maturity').value = 3;
-          document.getElementById('polarity-weight').value = 0.5;
-          document.getElementById('consent').value = 0;
-          document.getElementById('metacognition').value = 0;
-          document.getElementById('pole1-maturity-value').textContent = '3';
-          document.getElementById('pole2-maturity-value').textContent = '3';
-          document.getElementById('polarity-weight-value').textContent = '0.5';
-          document.getElementById('network').innerHTML = '';
-          document.getElementById('alert-placeholder').innerHTML =
-            '<div class="alert alert-info alert-dismissible fade show" role="alert">' +
-            'Form and graph reset.' +
-            '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>';
-        });
-    }
-
-    // Download graph
-    function downloadGraph() {
-      var network = document.getElementById('network').querySelector('canvas');
-      if (network) {
-        var link = document.createElement('a');
-        link.download = 'polarity_maturity_graph.png';
-        link.href = network.toDataURL('image/png');
-        link.click();
-      } else {
-        document.getElementById('alert-placeholder').innerHTML =
-          '<div class="alert alert-warning alert-dismissible fade show" role="alert">' +
-          'No graph to download. Generate a graph first.' +
-          '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>';
-      }
-    }
-  </script>
-</body>
+    </script>
+  </body>
 </html>
