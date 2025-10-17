@@ -4,16 +4,17 @@ import sqlite3
 import os
 import requests
 import json
-import jinja2
+from jinja2 import FileSystemLoader, Environment
 
-app = Flask(__name__, template_folder='templates')
-app.jinja_env.cache = {}  # Disable Jinja2 cache
+app = Flask(__name__)
+app.jinja_loader = FileSystemLoader('templates')
+app.jinja_env.cache = {}
 CORS(app)
 
 # Debug template folder
-print(f"DEBUG: Flask template_folder set to: {app.template_folder}")
-print(f"DEBUG: Absolute template path: {os.path.abspath(app.template_folder)}")
-print(f"DEBUG: index.html exists: {os.path.exists(os.path.join(app.template_folder, 'index.html'))}")
+print(f"DEBUG: Flask template_folder set to: templates")
+print(f"DEBUG: Absolute template path: {os.path.abspath('templates')}")
+print(f"DEBUG: index.html exists: {os.path.exists(os.path.join('templates', 'index.html'))}")
 
 # Database setup
 DB_PATH = 'model.db'
