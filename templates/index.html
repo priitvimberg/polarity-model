@@ -8,14 +8,16 @@
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; }
         #graph { width: 100%; height: 600px; border: 1px solid #ccc; }
-        #loading { text-align: center; margin: 20px; }
-        form { margin-bottom: 20px; }
+        #loading { text-align: center; margin: 20px; display: none; }
+        #promptForm { margin-bottom: 20px; }
+        textarea { width: 100%; max-width: 500px; }
+        button { padding: 8px 16px; }
     </style>
 </head>
 <body>
     <h1>Polarity & Maturity Model</h1>
     <h5>Create Polarity Graph</h5>
-    <p>3 3 0.5</p> <!-- Placeholder params from your site -->
+    <p>3 3 0.5</p> <!-- Placeholder params from live site -->
     <hr>
 
     <form id="promptForm">
@@ -28,36 +30,76 @@
     <div id="graph" style="display: none;"></div>
 
     <script>
-        // Basic form submit handler (POST to /generate_graph or your endpoint)
+        // Hide loading on load, show form
+        window.onload = function() {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('promptForm').style.display = 'block';
+            document.getElementById('graph').style.display = 'none';
+        };
+
         document.getElementById('promptForm').addEventListener('submit', function(e) {
             e.preventDefault();
             const prompt = document.getElementById('prompt').value;
-            fetch('/generate_graph', {  // Adjust endpoint if needed
+            if (!prompt) return;
+
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('loading').innerHTML = 'Parsing prompt with Grok...';
+
+            fetch('/generate_graph', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ prompt: prompt })
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                return response.json();
+            })
             .then(data => {
+                if (data.error) throw new Error(data.error);
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('graph').style.display = 'block';
-                renderGraph(data.nodes, data.edges);  // Assumes backend returns nodes/edges
+                renderGraph(data.nodes, data.edges, data.iterations);
             })
             .catch(error => {
-                console.error('Error:', error);
-                document.getElementById('loading').innerHTML = 'Error loading graph.';
+                console.error('Fetch/Render error:', error);
+                document.getElementById('loading').innerHTML = `Error: ${error.message}. Check console.`;
+                document.getElementById('loading').style.display = 'block';
             });
         });
 
-        // Vis.js graph renderer (placeholder—expand with your logic)
-        function renderGraph(nodesData, edgesData) {
+        // Enhanced Vis.js renderer
+        function renderGraph(nodesData, edgesData, iterations = []) {
             const container = document.getElementById('graph');
             const data = {
-                nodes: new vis.DataSet(nodesData),  // e.g., [{id:1, label:'Victim', size:10}]
-                edges: new vis.DataSet(edgesData)   // e.g., [{from:1, to:2, color:'red'}]
+                nodes: new vis.DataSet(nodesData.map(n => ({
+                    ...n,
+                    size: n.maturity * 10 + 10,
+                    color: n.polarity === 'light' ? '#00ff00' : '#ff0000'
+                }))),
+                edges: new vis.DataSet(edgesData.map(e => ({
+                    ...e,
+                    color: e.tension > 0.5 ? '#ff6600' : '#0000ff',
+                    arrows: e.direction ? 'to' : 'none'
+                })))
             };
-            const options = { physics: { enabled: true } };  // Add repulsion, etc.
-            new vis.Network(container, data, options);
+            const options = {
+                physics: { enabled: true, repulsion: { nodeDistance: 200 } },
+                nodes: { shape: 'dot', font: { size: 14 } },
+                edges: { smooth: false },
+                interaction: { hover: true, zoomView: true }
+            };
+            const network = new vis.Network(container, data, options);
+
+            // Hover tooltips for nodes
+            network.on('hoverNode', function(params) {
+                const node = data.nodes.get(params.node);
+                console.log(`Node ${node.id}: ${node.label} - Maturity: ${node.maturity}, Polarity: ${node.polarity}`);
+            });
+
+            // Log iterations (tango steps)
+            if (iterations.length) {
+                console.log('Tango iterations:', iterations);
+            }
         }
     </script>
 </body>
