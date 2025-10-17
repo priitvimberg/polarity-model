@@ -45,7 +45,7 @@ def xai_api_call(prompt_data):
     payload = {
         'model': 'grok-4-0709',
         'messages': [
-            {'role': 'system', 'content': 'You are an assistant generating structured JSON for polarity and maturity model graphs based on HI-AI survival dance concepts (fractal intelligence, Tension Triangle, role flips, ego states, metacognition). Return ONLY JSON with "nodes" (array of {id, name, maturity: 1-5, ego_state: Free Child/Adapted Child/Adult/Controlling Parent/Nurturing Parent, role: Victim/Persecutor/Rescuer/Creator/Challenger/Coach, metacognition: 0/1, history}) and "edges" (array of {source, target, polarity: -1.0 to 1.0, light_shadow: light/shadow, role, consent: 0/1, description, role_flip}). No other text.'},
+            {'role': 'system', 'content': 'You are an assistant generating structured JSON for polarity and maturity model graphs based on HI-AI survival dance concepts (fractal intelligence, Tension Triangle, role flips, ego states, metacognition). Return ONLY JSON with "nodes" (array of {id, label, maturity: 1-5, ego_state: Free Child/Adapted Child/Adult/Controlling Parent/Nurturing Parent, role: Victim/Persecutor/Rescuer/Creator/Challenger/Coach, metacognition: 0/1, history}) and "edges" (array of {from, to, polarity: -1.0 to 1.0, light_shadow: light/shadow, role, consent: 0/1, description, role_flip}). No other text.'},
             {'role': 'user', 'content': prompt}
         ]
     }
@@ -67,11 +67,13 @@ def process_response(api_response, prompt_data):
             raise ValueError("Empty nodes or edges in parsed response")
         # Apply user inputs
         if len(nodes) >= 2:
-            nodes[0]['name'] = prompt_data.get('pole1Name', 'Pole 1')
+            nodes[0]['label'] = prompt_data.get('pole1Name', 'Pole 1')
             nodes[0]['maturity'] = max(1, min(5, prompt_data.get('pole1Maturity', 3)))
-            nodes[1]['name'] = prompt_data.get('pole2Name', 'Pole 2')
+            nodes[1]['label'] = prompt_data.get('pole2Name', 'Pole 2')
             nodes[1]['maturity'] = max(1, min(5, prompt_data.get('pole2Maturity', 3)))
             for edge in edges:
+                edge['from'] = 1
+                edge['to'] = 2
                 edge['polarity'] = max(-1.0, min(1.0, prompt_data.get('polarityWeight', 0.5)))
                 edge['consent'] = prompt_data.get('consent', 0)
                 edge['metacognition'] = prompt_data.get('metacognition', 0)
@@ -80,11 +82,11 @@ def process_response(api_response, prompt_data):
     except Exception as e:
         print(f"DEBUG: Error processing response, using fallback: {str(e)}")
         nodes = [
-            {'id': 1, 'name': prompt_data.get('pole1Name', 'Pole 1'), 'maturity': prompt_data.get('pole1Maturity', 1), 'ego_state': 'Adapted Child', 'role': 'Victim', 'metacognition': prompt_data.get('metacognition', 0), 'history': 'Fractal survival loop'},
-            {'id': 2, 'name': prompt_data.get('pole2Name', 'Pole 2'), 'maturity': prompt_data.get('pole2Maturity', 5), 'ego_state': 'Adult', 'role': 'Creator', 'metacognition': prompt_data.get('metacognition', 0), 'history': 'Maturity flip via feedback'}
+            {'id': 1, 'label': prompt_data.get('pole1Name', 'Pole 1'), 'maturity': prompt_data.get('pole1Maturity', 1), 'ego_state': 'Adapted Child', 'role': 'Victim', 'metacognition': prompt_data.get('metacognition', 0), 'history': 'Fractal survival loop'},
+            {'id': 2, 'label': prompt_data.get('pole2Name', 'Pole 2'), 'maturity': prompt_data.get('pole2Maturity', 5), 'ego_state': 'Adult', 'role': 'Creator', 'metacognition': prompt_data.get('metacognition', 0), 'history': 'Maturity flip via feedback'}
         ]
         edges = [{
-            'source': 1, 'target': 2, 'polarity': prompt_data.get('polarityWeight', -0.5), 'light_shadow': 'shadow' if prompt_data.get('polarityWeight', 0) < 0 else 'light',
+            'from': 1, 'to': 2, 'polarity': prompt_data.get('polarityWeight', -0.5), 'light_shadow': 'shadow' if prompt_data.get('polarityWeight', 0) < 0 else 'light',
             'role': 'Victim-Persecutor', 'consent': prompt_data.get('consent', 0), 'description': 'Tension flip to light', 'role_flip': 'Victim to Creator'
         }]
         return nodes, edges

@@ -283,18 +283,21 @@
           color: {
             background: `hsl(${node.maturity * 24}, 100%, 50%)`, // Red (1) to green (5)
             border: '#000000'
-          }
+          },
+          font: { size: 16, color: document.body.classList.contains('dark') ? '#ffffff' : '#000000' }
         })));
         var edges = new vis.DataSet(data.edges.map(edge => ({
           ...edge,
           width: Math.abs(edge.polarity) * 5,
           color: edge.polarity >= 0 ? 'green' : 'red',
-          label: edge.polarity.toFixed(2)
+          label: edge.polarity.toFixed(2),
+          font: { align: 'middle', size: 14 }
         })));
         var container = document.getElementById('network');
         window.network = new vis.Network(container, { nodes: nodes, edges: edges }, {
-          nodes: { font: { color: document.body.classList.contains('dark') ? '#ffffff' : '#000000' } },
-          edges: { font: { align: 'middle' } }
+          nodes: { shape: 'circle' },
+          edges: { arrows: 'to', smooth: true },
+          physics: { enabled: true }
         });
       })
       .catch(error => {
