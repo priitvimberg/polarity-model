@@ -288,16 +288,18 @@
         })));
         var edges = new vis.DataSet(data.edges.map(edge => ({
           ...edge,
-          width: Math.abs(edge.polarity) * 5,
+          width: Math.max(1, Math.abs(edge.polarity) * 5), // Ensure minimum width
           color: edge.polarity >= 0 ? 'green' : 'red',
-          label: edge.polarity.toFixed(2),
-          font: { align: 'middle', size: 14 }
+          label: edge.label || edge.polarity.toFixed(2),
+          font: { align: 'middle', size: 14, color: document.body.classList.contains('dark') ? '#ffffff' : '#000000' },
+          arrows: 'to',
+          smooth: { enabled: true, type: 'continuous' }
         })));
         var container = document.getElementById('network');
         window.network = new vis.Network(container, { nodes: nodes, edges: edges }, {
           nodes: { shape: 'circle' },
-          edges: { arrows: 'to', smooth: true },
-          physics: { enabled: true }
+          edges: { arrows: 'to', smooth: { enabled: true, type: 'continuous' } },
+          physics: { enabled: true, stabilization: false }
         });
       })
       .catch(error => {

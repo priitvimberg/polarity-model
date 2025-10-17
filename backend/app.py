@@ -45,7 +45,7 @@ def xai_api_call(prompt_data):
     payload = {
         'model': 'grok-4-0709',
         'messages': [
-            {'role': 'system', 'content': 'You are an assistant generating structured JSON for polarity and maturity model graphs based on HI-AI survival dance concepts (fractal intelligence, Tension Triangle, role flips, ego states, metacognition). Return ONLY JSON with "nodes" (array of {id, label, maturity: 1-5, ego_state: Free Child/Adapted Child/Adult/Controlling Parent/Nurturing Parent, role: Victim/Persecutor/Rescuer/Creator/Challenger/Coach, metacognition: 0/1, history}) and "edges" (array of {from, to, polarity: -1.0 to 1.0, light_shadow: light/shadow, role, consent: 0/1, description, role_flip}). No other text.'},
+            {'role': 'system', 'content': 'You are an assistant generating structured JSON for polarity and maturity model graphs based on HI-AI survival dance concepts (fractal intelligence, Tension Triangle, role flips, ego states, metacognition). Return ONLY JSON with "nodes" (array of {id, label, maturity: 1-5, ego_state: Free Child/Adapted Child/Adult/Controlling Parent/Nurturing Parent, role: Victim/Persecutor/Rescuer/Creator/Challenger/Coach, metacognition: 0/1, history}) and "edges" (array of {from, to, label, polarity: -1.0 to 1.0, light_shadow: light/shadow, role, consent: 0/1, description, role_flip}). No other text.'},
             {'role': 'user', 'content': prompt}
         ]
     }
@@ -63,20 +63,33 @@ def process_response(api_response, prompt_data):
         parsed = json.loads(content)
         nodes = parsed.get('nodes', [])
         edges = parsed.get('edges', [])
-        if not nodes or not edges:
-            raise ValueError("Empty nodes or edges in parsed response")
+        if not nodes or len(nodes) < 2:
+            raise ValueError("Insufficient nodes in response")
+        if not edges:
+            print("DEBUG: No edges in API response, using fallback edge")
+            edges = [{
+                'from': 1,
+                'to': 2,
+                'label': str(prompt_data.get('polarityWeight', 0.5)),
+                'polarity': max(-1.0, min(1.0, prompt_data.get('polarityWeight', 0.5))),
+                'light_shadow': 'shadow' if prompt_data.get('polarityWeight', 0) < 0 else 'light',
+                'role': 'Victim-Persecutor',
+                'consent': prompt_data.get('consent', 0),
+                'description': 'Tension flip to light',
+                'role_flip': 'Victim to Creator'
+            }]
         # Apply user inputs
-        if len(nodes) >= 2:
-            nodes[0]['label'] = prompt_data.get('pole1Name', 'Pole 1')
-            nodes[0]['maturity'] = max(1, min(5, prompt_data.get('pole1Maturity', 3)))
-            nodes[1]['label'] = prompt_data.get('pole2Name', 'Pole 2')
-            nodes[1]['maturity'] = max(1, min(5, prompt_data.get('pole2Maturity', 3)))
-            for edge in edges:
-                edge['from'] = 1
-                edge['to'] = 2
-                edge['polarity'] = max(-1.0, min(1.0, prompt_data.get('polarityWeight', 0.5)))
-                edge['consent'] = prompt_data.get('consent', 0)
-                edge['metacognition'] = prompt_data.get('metacognition', 0)
+        nodes[0]['label'] = prompt_data.get('pole1Name', 'Pole 1')
+        nodes[0]['maturity'] = max(1, min(5, prompt_data.get('pole1Maturity', 3)))
+        nodes[1]['label'] = prompt_data.get('pole2Name', 'Pole 2')
+        nodes[1]['maturity'] = max(1, min(5, prompt_data.get('pole2Maturity', 3)))
+        for edge in edges:
+            edge['from'] = 1
+            edge['to'] = 2
+            edge['label'] = str(prompt_data.get('polarityWeight', edge.get('polarity', 0.5)))
+            edge['polarity'] = max(-1.0, min(1.0, prompt_data.get('polarityWeight', edge.get('polarity', 0.5))))
+            edge['consent'] = prompt_data.get('consent', edge.get('consent', 0))
+            edge['metacognition'] = prompt_data.get('metacognition', edge.get('metacognition', 0))
         print(f"DEBUG: Graph data: {json.dumps({'nodes': nodes, 'edges': edges})[:200]}...")
         return nodes, edges
     except Exception as e:
@@ -86,9 +99,17 @@ def process_response(api_response, prompt_data):
             {'id': 2, 'label': prompt_data.get('pole2Name', 'Pole 2'), 'maturity': prompt_data.get('pole2Maturity', 5), 'ego_state': 'Adult', 'role': 'Creator', 'metacognition': prompt_data.get('metacognition', 0), 'history': 'Maturity flip via feedback'}
         ]
         edges = [{
-            'from': 1, 'to': 2, 'polarity': prompt_data.get('polarityWeight', -0.5), 'light_shadow': 'shadow' if prompt_data.get('polarityWeight', 0) < 0 else 'light',
-            'role': 'Victim-Persecutor', 'consent': prompt_data.get('consent', 0), 'description': 'Tension flip to light', 'role_flip': 'Victim to Creator'
+            'from': 1,
+            'to': 2,
+            'label': str(prompt_data.get('polarityWeight', -0.5)),
+            'polarity': max(-1.0, min(1.0, prompt_data.get('polarityWeight', -0.5))),
+            'light_shadow': 'shadow' if prompt_data.get('polarityWeight', 0) < 0 else 'light',
+            'role': 'Victim-Persecutor',
+            'consent': prompt_data.get('consent', 0),
+            'description': 'Tension flip to light',
+            'role_flip': 'Victim to Creator'
         }]
+        print(f"DEBUG: Fallback graph data: {json.dumps({'nodes': nodes, 'edges': edges})[:200]}...")
         return nodes, edges
 
 @app.route('/', methods=['GET'])
