@@ -1,390 +1,64 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Polarity & Maturity Model</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://unpkg.com/vis-network@9.1.9/dist/vis-network.min.css" rel="stylesheet">
-  <style>
-    body.light { background-color: #ffffff; color: #000000; }
-    body.dark { background-color: #1e1e1e; color: #ffffff; }
-    .dark #network { background-color: #2c2c2c; }
-    #network { width: 100%; height: 600px; border: 1px solid #ccc; }
-    #spinner { display: none; text-align: center; padding: 20px; }
-    .input-group { margin-bottom: 1rem; }
-    .form-range::-webkit-slider-thumb { background: #007bff; }
-    .form-range::-moz-range-thumb { background: #007bff; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Polarity & Maturity Model</title>
+    <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #graph { width: 100%; height: 600px; border: 1px solid #ccc; }
+        #loading { text-align: center; margin: 20px; }
+        form { margin-bottom: 20px; }
+    </style>
 </head>
-<body class="light">
-  <div class="container mt-4">
+<body>
     <h1>Polarity & Maturity Model</h1>
-    <!-- Theme Toggle -->
-    <div class="form-check form-switch mb-3">
-      <input class="form-check-input" type="checkbox" id="themeToggle" onchange="toggleTheme()">
-      <label class="form-check-label" for="themeToggle">Dark Mode</label>
-    </div>
-    <!-- Form -->
-    <div class="card p-3 mb-3">
-      <div class="card-body">
-        <h5 class="card-title">Create Polarity Graph</h5>
-        <div class="mb-3">
-          <label for="example-select" class="form-label">Load Example</label>
-          <select class="form-select" id="example-select" onchange="loadExample()">
-            <option value="">Select an example</option>
-            <option value="Stability vs. Change">Stability vs. Change</option>
-            <option value="Individual vs. Team">Individual vs. Team</option>
-            <option value="Centralization vs. Decentralization">Centralization vs. Decentralization</option>
-          </select>
-        </div>
-        <div class="input-group">
-          <div class="mb-3 w-50 pe-2">
-            <label for="pole1-name" class="form-label">Pole 1 Name</label>
-            <input type="text" class="form-control" id="pole1-name" placeholder="e.g., Stability"
-              data-bs-toggle="tooltip" data-bs-placement="top" title="Name of the first pole in the dilemma.">
-          </div>
-          <div class="mb-3 w-50 ps-2">
-            <label for="pole2-name" class="form-label">Pole 2 Name</label>
-            <input type="text" class="form-control" id="pole2-name" placeholder="e.g., Change"
-              data-bs-toggle="tooltip" data-bs-placement="top" title="Name of the second pole in the dilemma.">
-          </div>
-        </div>
-        <div class="input-group">
-          <div class="mb-3 w-50 pe-2">
-            <label for="pole1-maturity" class="form-label">Pole 1 Maturity (1-5)</label>
-            <input type="range" class="form-range" id="pole1-maturity" min="1" max="5" step="1" value="3"
-              oninput="updateGraphDebounced()" data-bs-toggle="tooltip" data-bs-placement="top"
-              title="Maturity level for Pole 1 (1: initial, 5: optimizing).">
-            <small id="pole1-maturity-value">3</small>
-          </div>
-          <div class="mb-3 w-50 ps-2">
-            <label for="pole2-maturity" class="form-label">Pole 2 Maturity (1-5)</label>
-            <input type="range" class="form-range" id="pole2-maturity" min="1" max="5" step="1" value="3"
-              oninput="updateGraphDebounced()" data-bs-toggle="tooltip" data-bs-placement="top"
-              title="Maturity level for Pole 2 (1: initial, 5: optimizing).">
-            <small id="pole2-maturity-value">3</small>
-          </div>
-        </div>
-        <div class="mb-3">
-          <label for="polarity-weight" class="form-label">Polarity Weight (-1.0 shadow to 1.0 light)</label>
-          <input type="range" class="form-range" id="polarity-weight" min="-1.0" max="1.0" step="0.1" value="0.5"
-            oninput="updateGraphDebounced()" data-bs-toggle="tooltip" data-bs-placement="top"
-            title="Weight of polarity (-1.0: shadow/manipulative, 1.0: light/consensual).">
-          <small id="polarity-weight-value">0.5</small>
-        </div>
-        <div class="input-group">
-          <div class="mb-3 w-50 pe-2">
-            <label for="consent" class="form-label">Consent</label>
-            <select class="form-select" id="consent" onchange="updateGraphDebounced()"
-              data-bs-toggle="tooltip" data-bs-placement="top" title="0 for no consent, 1 for full consent.">
-              <option value="0">No Consent (0)</option>
-              <option value="1">Full Consent (1)</option>
-            </select>
-          </div>
-          <div class="mb-3 w-50 ps-2">
-            <label for="metacognition" class="form-label">Metacognition</label>
-            <select class="form-select" id="metacognition" onchange="updateGraphDebounced()"
-              data-bs-toggle="tooltip" data-bs-placement="top" title="0 for no metacognition, 1 for awareness of dynamics.">
-              <option value="0">No Metacognition (0)</option>
-              <option value="1">Metacognition (1)</option>
-            </select>
-          </div>
-        </div>
-        <div class="d-flex gap-2">
-          <button type="button" class="btn btn-primary" onclick="updateGraph()">Generate Graph</button>
-          <button type="button" class="btn btn-secondary" onclick="resetForm()">Reset</button>
-          <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#helpModal">Help</button>
-          <button type="button" class="btn btn-primary" onclick="downloadGraph()">Download Graph</button>
-        </div>
-      </div>
-    </div>
-    <!-- Alert Placeholder -->
-    <div id="alert-placeholder" class="mt-3"></div>
-    <!-- Spinner -->
-    <div id="spinner">
-      <div class="spinner-border text-primary" role="status">
-        <span class="visually-hidden">Loading...</span>
-      </div>
-    </div>
-    <!-- Graph Container -->
-    <div id="network"></div>
-    <!-- Help Modal -->
-    <div class="modal fade" id="helpModal" tabindex="-1" aria-labelledby="helpModalLabel" aria-hidden="true">
-      <div class="modal-dialog">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title" id="helpModalLabel">About Polarity & Maturity Model</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-          </div>
-          <div class="modal-body">
-            <p>This app visualizes polarities (ongoing dilemmas like 'Individual vs. Team') across maturity stages (1: Initial, 5: Optimizing).</p>
-            <p>Enter pole names, adjust maturity and polarity sliders, and set consent/metacognition to see a graph of their interactions, with ego states and role flips.</p>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <h5>Create Polarity Graph</h5>
+    <p>3 3 0.5</p> <!-- Placeholder params from your site -->
+    <hr>
 
-    <!-- Scripts -->
-    <script src="https://unpkg.com/vis-network@9.1.9/dist/vis-network.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <form id="promptForm">
+        <label for="prompt">Enter your prompt (e.g., "Map Victim-Rescuer dynamic in an org team, Adapted Child maturity, no consent"):</label><br>
+        <textarea id="prompt" name="prompt" rows="4" cols="50" required></textarea><br>
+        <button type="submit">Submit</button>
+    </form>
+
+    <div id="loading">Loading...</div>
+    <div id="graph" style="display: none;"></div>
+
     <script>
-      document.addEventListener('DOMContentLoaded', () => {
-        // Initialize tooltips
-        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-        tooltipTriggerList.forEach(function (tooltipTriggerEl) {
-          new bootstrap.Tooltip(tooltipTriggerEl);
-        });
-
-        // Form elements
-        const pole1Name = document.getElementById('pole1-name');
-        const pole2Name = document.getElementById('pole2-name');
-        const pole1Maturity = document.getElementById('pole1-maturity');
-        const pole2Maturity = document.getElementById('pole2-maturity');
-        const polarityWeight = document.getElementById('polarity-weight');
-        const consent = document.getElementById('consent');
-        const metacognition = document.getElementById('metacognition');
-        const exampleSelect = document.getElementById('example-select');
-        const generateBtn = document.getElementById('generate-btn');
-        const resetBtn = document.getElementById('reset-btn');
-        const downloadBtn = document.getElementById('download-btn');
-
-        // Update slider values display
-        pole1Maturity.addEventListener('input', () => {
-          document.getElementById('pole1-maturity-value').textContent = pole1Maturity.value;
-          updateGraphDebounced();
-        });
-        pole2Maturity.addEventListener('input', () => {
-          document.getElementById('pole2-maturity-value').textContent = pole2Maturity.value;
-          updateGraphDebounced();
-        });
-        polarityWeight.addEventListener('input', () => {
-          document.getElementById('polarity-weight-value').textContent = polarityWeight.value;
-          updateGraphDebounced();
-        });
-        pole1Name.addEventListener('input', updateGraphDebounced);
-        pole2Name.addEventListener('input', updateGraphDebounced);
-        exampleSelect.addEventListener('change', loadExample);
-        consent.addEventListener('change', updateGraphDebounced);
-        metacognition.addEventListener('change', updateGraphDebounced);
-        generateBtn.addEventListener('click', updateGraph);
-        resetBtn.addEventListener('click', resetForm);
-        downloadBtn.addEventListener('click', downloadGraph);
-
-        // Theme initialization
-        if (localStorage.getItem('theme') === 'dark') {
-          document.body.classList.add('dark');
-          document.getElementById('themeToggle').checked = true;
-        } else {
-          document.body.classList.add('light');
-        }
-
-        // Theme toggle function
-        function toggleTheme() {
-          var body = document.body;
-          body.classList.toggle('dark');
-          body.classList.toggle('light');
-          localStorage.setItem('theme', body.classList.contains('dark') ? 'dark' : 'light');
-          if (window.network) {
-            window.network.setOptions({ 
-              nodes: { font: { color: body.classList.contains('dark') ? '#ffffff' : '#000000' } },
-              edges: { font: { color: body.classList.contains('dark') ? '#ffffff' : '#000000' } }
-            });
-          }
-        }
-
-        document.getElementById('themeToggle').addEventListener('change', toggleTheme);
-
-        // Debounce function
-        function debounce(func, wait) {
-          let timeout;
-          return function executedFunction(...args) {
-            const later = () => {
-              clearTimeout(timeout);
-              func(...args);
-            };
-            clearTimeout(timeout);
-            timeout = setTimeout(later, wait);
-          };
-        }
-
-        // Load example
-        function loadExample() {
-          if (exampleSelect.value === 'Stability vs. Change') {
-            pole1Name.value = 'Stability';
-            pole2Name.value = 'Change';
-            pole1Maturity.value = 2;
-            pole2Maturity.value = 2;
-            polarityWeight.value = 0.5;
-            consent.value = 0;
-            metacognition.value = 0;
-          } else if (exampleSelect.value === 'Individual vs. Team') {
-            pole1Name.value = 'Individual';
-            pole2Name.value = 'Team';
-            pole1Maturity.value = 4;
-            pole2Maturity.value = 4;
-            polarityWeight.value = 0.8;
-            consent.value = 1;
-            metacognition.value = 1;
-          } else if (exampleSelect.value === 'Centralization vs. Decentralization') {
-            pole1Name.value = 'Centralization';
-            pole2Name.value = 'Decentralization';
-            pole1Maturity.value = 3;
-            pole2Maturity.value = 3;
-            polarityWeight.value = 0.5;
-            consent.value = 0;
-            metacognition.value = 0;
-          } else {
-            pole1Name.value = '';
-            pole2Name.value = '';
-            pole1Maturity.value = 3;
-            pole2Maturity.value = 3;
-            polarityWeight.value = 0.5;
-            consent.value = 0;
-            metacognition.value = 0;
-          }
-          document.getElementById('pole1-maturity-value').textContent = pole1Maturity.value;
-          document.getElementById('pole2-maturity-value').textContent = pole2Maturity.value;
-          document.getElementById('polarity-weight-value').textContent = polarityWeight.value;
-          updateGraph();
-        }
-
-        // Update graph dynamically (debounced)
-        const updateGraphDebounced = debounce(updateGraph, 500);
-        function updateGraph() {
-          if (!pole1Name.value.trim() || !pole2Name.value.trim()) {
-            document.getElementById('alert-placeholder').innerHTML =
-              '<div class="alert alert-warning alert-dismissible fade show" role="alert">' +
-              'Please enter both pole names.' +
-              '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>';
-            return;
-          }
-          document.getElementById('spinner').style.display = 'block';
-          fetch('/add', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              prompt: `${pole1Name.value} vs. ${pole2Name.value}`,
-              pole1Name: pole1Name.value,
-              pole2Name: pole2Name.value,
-              pole1Maturity: parseInt(pole1Maturity.value),
-              pole2Maturity: parseInt(pole2Maturity.value),
-              polarityWeight: parseFloat(polarityWeight.value),
-              consent: parseInt(consent.value),
-              metacognition: parseInt(metacognition.value)
+        // Basic form submit handler (POST to /generate_graph or your endpoint)
+        document.getElementById('promptForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const prompt = document.getElementById('prompt').value;
+            fetch('/generate_graph', {  // Adjust endpoint if needed
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt: prompt })
             })
-          })
-          .then(response => {
-            if (!response.ok) {
-              return response.json().then(errData => { throw errData; });
-            }
-            return response.json();
-          })
-          .then(data => {
-            document.getElementById('spinner').style.display = 'none';
-            document.getElementById('alert-placeholder').innerHTML =
-              '<div class="alert alert-success alert-dismissible fade show" role="alert">' +
-              'Graph generated successfully!' +
-              '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>';
-            console.log('Graph data:', data);
-            try {
-              const nodes = new vis.DataSet(data.nodes.map(node => ({
-                id: node.id,
-                label: node.label,
-                size: node.maturity * 20,
-                color: {
-                  background: `hsl(${node.maturity * 24}, 100%, 50%)`,
-                  border: '#000000'
-                },
-                font: { size: 16, color: document.body.classList.contains('dark') ? '#ffffff' : '#000000' }
-              })));
-              const edges = new vis.DataSet(data.edges.map((edge, index) => ({
-                id: index + 1,
-                from: edge.from,
-                to: edge.to,
-                label: edge.label || edge.polarity.toFixed(2),
-                width: Math.max(2, Math.abs(edge.polarity) * 5),
-                color: { color: edge.polarity >= 0 ? 'green' : 'red' },
-                font: { align: 'middle', size: 14, color: document.body.classList.contains('dark') ? '#ffffff' : '#000000' },
-                arrows: { to: { enabled: true, type: 'arrow' } },
-                smooth: { enabled: true, type: 'continuous' }
-              })));
-              const container = document.getElementById('network');
-              window.network = new vis.Network(container, { nodes: nodes, edges: edges }, {
-                nodes: { shape: 'circle', physics: true },
-                edges: { 
-                  arrows: { to: { enabled: true, type: 'arrow' } }, 
-                  smooth: { enabled: true, type: 'continuous' },
-                  physics: true
-                },
-                physics: { 
-                  enabled: true, 
-                  stabilization: { enabled: true, iterations: 100 },
-                  barnesHut: { gravitationalConstant: -2000, springLength: 150 }
-                },
-                layout: { improvedLayout: true }
-              });
-            } catch (err) {
-              console.error('Vis.js initialization error:', err);
-              document.getElementById('alert-placeholder').innerHTML =
-                '<div class="alert alert-danger alert-dismissible fade show" role="alert">' +
-                `Failed to render graph: ${err.message}` +
-                '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>';
-            }
-          })
-          .catch(error => {
-            document.getElementById('spinner').style.display = 'none';
-            document.getElementById('alert-placeholder').innerHTML =
-              '<div class="alert alert-danger alert-dismissible fade show" role="alert">' +
-              `Error generating graph: ${error.error || error.message || 'Unknown error'}` +
-              '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>';
-            console.error('Fetch error:', error);
-          });
-        }
-
-        // Reset form
-        function resetForm() {
-          fetch('/reset', { method: 'POST' })
             .then(response => response.json())
             .then(data => {
-              pole1Name.value = '';
-              pole2Name.value = '';
-              exampleSelect.value = '';
-              pole1Maturity.value = 3;
-              pole2Maturity.value = 3;
-              polarityWeight.value = 0.5;
-              consent.value = 0;
-              metacognition.value = 0;
-              document.getElementById('pole1-maturity-value').textContent = '3';
-              document.getElementById('pole2-maturity-value').textContent = '3';
-              document.getElementById('polarity-weight-value').textContent = '0.5';
-              document.getElementById('network').innerHTML = '';
-              document.getElementById('alert-placeholder').innerHTML =
-                '<div class="alert alert-info alert-dismissible fade show" role="alert">' +
-                'Form and graph reset.' +
-                '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>';
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('graph').style.display = 'block';
+                renderGraph(data.nodes, data.edges);  // Assumes backend returns nodes/edges
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('loading').innerHTML = 'Error loading graph.';
             });
-        }
+        });
 
-        // Download graph
-        function downloadGraph() {
-          const network = document.getElementById('network').querySelector('canvas');
-          if (network) {
-            const link = document.createElement('a');
-            link.download = 'polarity_maturity_graph.png';
-            link.href = network.toDataURL('image/png');
-            link.click();
-          } else {
-            document.getElementById('alert-placeholder').innerHTML =
-              '<div class="alert alert-warning alert-dismissible fade show" role="alert">' +
-              'No graph to download. Generate a graph first.' +
-              '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>';
-          }
+        // Vis.js graph renderer (placeholder—expand with your logic)
+        function renderGraph(nodesData, edgesData) {
+            const container = document.getElementById('graph');
+            const data = {
+                nodes: new vis.DataSet(nodesData),  // e.g., [{id:1, label:'Victim', size:10}]
+                edges: new vis.DataSet(edgesData)   // e.g., [{from:1, to:2, color:'red'}]
+            };
+            const options = { physics: { enabled: true } };  // Add repulsion, etc.
+            new vis.Network(container, data, options);
         }
-      });
     </script>
-  </body>
+</body>
 </html>
