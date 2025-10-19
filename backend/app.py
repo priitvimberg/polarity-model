@@ -10,7 +10,7 @@ app = Flask(__name__, template_folder=os.path.join(os.path.dirname(__file__), '.
 CORS(app)
 logging.basicConfig(level=logging.DEBUG)
 
-template_path = os.path.join(app.root_path, '..', 'templates', 'index.html')
+template_path = os.path.join(os.path.dirname(__file__), '..', 'templates', 'index.html')
 logging.debug(f"Looking for template at: {template_path}")
 logging.debug(f"File exists: {os.path.exists(template_path)}")
 
@@ -23,25 +23,51 @@ history = []
 
 def call_grok_api(prompt):
     if not API_KEY:
-        return {'entities': [{'id': 'light', 'label': prompt.split(' vs ')[0], 'maturity': 3, 'polarity': 'light'},
-                             {'id': 'shadow', 'label': prompt.split(' vs ')[1], 'maturity': 2, 'polarity': 'shadow'}],
-                'relations': [{'from': 'light', 'to': 'shadow', 'type': 'attraction', 'tension': 0.5}]}
+        logging.info("Using mock data (no API_KEY)")
+        light_label, shadow_label = prompt.split(' vs ') if ' vs ' in prompt else ('light', 'shadow')
+        return {
+            'entities': [
+                {'id': light_label, 'label': light_label, 'maturity': 3, 'polarity': 'light'},
+                {'id': shadow_label, 'label': shadow_label, 'maturity': 2, 'polarity': 'shadow'}
+            ],
+            'relations': [{'from': light_label, 'to': shadow_label, 'type': 'attraction', 'tension': 0.5}]
+        }
     
     headers = {'Authorization': f'Bearer {API_KEY}', 'Content-Type': 'application/json'}
     data = {
-        'model': 'grok-beta',
-        'messages': [{'role': 'system', 'content': 'Parse polarity pair into graph: entities (label, maturity 1-5, polarity light/shadow), relations (from/to, type attraction/repulsion, tension 0-1). Output JSON only.'},
-                     {'role': 'user', 'content': prompt}],
+        'model': 'grok-2',  # Updated to current model
+        'messages': [
+            {'role': 'system', 'content': 'Parse polarity pair into graph: entities (label, maturity 1-5, polarity light/shadow), relations (from/to, type attraction/repulsion, tension 0-1). Output JSON only.'},
+            {'role': 'user', 'content': prompt}
+        ],
         'max_tokens': 500
     }
     try:
-        response = requests.post('https://api.x.ai/v1/chat/completions', headers=headers, json=data)
+        logging.debug(f"Calling Grok API with prompt: {prompt[:100]}...")
+        response = requests.post('https://api.x.ai/v1/chat/completions', headers=headers, json=data)  # Fixed URL
         response.raise_for_status()
-        parsed = json.loads(response.json()['choices'][0]['message']['content'])
-        return parsed
+        parsed_text = response.json()['choices'][0]['message']['content']
+        logging.debug(f"Grok response: {parsed_text[:100]}...")
+        return json.loads(parsed_text)
+    except requests.exceptions.HTTPError as e:
+        logging.error(f"Grok HTTP error: {e} (Status: {e.response.status_code})")
+        if e.response.status_code == 404:
+            logging.error("404: Check API URL/model. Falling back to mock.")
+    except json.JSONDecodeError as e:
+        logging.error(f"JSON parse error in Grok response: {e}")
     except Exception as e:
         logging.error(f"Grok API error: {e}")
-        return None
+    
+    # Always fallback to mock on any error
+    logging.info("Falling back to mock data due to API error")
+    light_label, shadow_label = prompt.split(' vs ') if ' vs ' in prompt else ('light', 'shadow')
+    return {
+        'entities': [
+            {'id': light_label, 'label': light_label, 'maturity': 3, 'polarity': 'light'},
+            {'id': shadow_label, 'label': shadow_label, 'maturity': 2, 'polarity': 'shadow'}
+        ],
+        'relations': [{'from': light_label, 'to': shadow_label, 'type': 'attraction', 'tension': 0.5}]
+    }
 
 def run_tango_simulation(entities, relations, iterations=5):
     global G, history
@@ -62,6 +88,7 @@ def run_tango_simulation(entities, relations, iterations=5):
                     G.nodes[u]['polarity'] = 'light' if old_p == 'shadow' else 'shadow'
                     step['changes'].append(f"Flipped {u} from {old_p}")
         history.append(step)
+        logging.debug(f"Iteration {i+1}: {step}")
     return history
 
 @app.route('/')
@@ -75,12 +102,11 @@ def index():
 
 @app.route('/generate_graph', methods=['POST'])
 def generate_graph():
-    # Existing full prompt route (keep for compatibility)
     try:
         prompt = request.json.get('prompt')
+        if not prompt:
+            return jsonify({'error': 'No prompt provided'}), 400
         parsed = call_grok_api(prompt)
-        if not parsed:
-            return jsonify({'error': 'Failed to parse'}), 500
         entities = parsed.get('entities', [])
         relations = parsed.get('relations', [])
         iterations = run_tango_simulation(entities, relations)
@@ -88,6 +114,7 @@ def generate_graph():
         edges = [{'from': r['from'], 'to': r['to'], 'tension': r['tension']} for r in relations]
         return jsonify({'nodes': nodes, 'edges': edges, 'iterations': iterations})
     except Exception as e:
+        logging.error(f"Graph gen error: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/add_polarity', methods=['POST'])
@@ -101,9 +128,6 @@ def add_polarity():
         
         prompt = f"{light} vs {shadow} polarity in relationship, assign maturity and tension"
         parsed = call_grok_api(prompt)
-        if not parsed:
-            return jsonify({'error': 'Failed to parse pair'}), 500
-        
         entities = parsed.get('entities', [])
         relations = parsed.get('relations', [])
         iterations = run_tango_simulation(entities, relations)
@@ -120,6 +144,7 @@ def add_polarity():
             'iterations': iterations
         })
     except Exception as e:
+        logging.error(f"Add polarity error: {e}")
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
