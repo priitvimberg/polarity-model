@@ -3,3 +3,8 @@ test_db.py
 test_db.py
 test_api.py
 test_db.py
+.env
+*.env
+venv/
+__pycache__/
+*.pyc
