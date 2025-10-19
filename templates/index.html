@@ -12,8 +12,9 @@
         form { margin-bottom: 20px; }
         input[type="text"] { width: 200px; margin-right: 10px; }
         input[type="range"] { width: 200px; }
-        button { padding: 8px 16px; }
+        button { padding: 8px 16px; margin-right: 10px; }
         #state { margin-top: 10px; font-style: italic; }
+        #iteration { margin-top: 10px; }
     </style>
 </head>
 <body>
@@ -31,7 +32,7 @@
         <button type="submit">Add Pair</button>
     </form>
 
-    <!-- Handles: Sliders for Maturity, Fear, Extremity -->
+    <!-- Handles: Sliders -->
     <div id="controls" style="display: none;">
         <label for="maturity">Maturity (1-5):</label>
         <input type="range" id="maturity" name="maturity" min="1" max="5" value="3" step="1">
@@ -42,17 +43,21 @@
         <label for="extremity">Extremity (0-1):</label>
         <input type="range" id="extremity" name="extremity" min="0" max="1" value="0.5" step="0.1">
         <span id="extremityValue">0.5</span><br>
+        <button id="stepIterations">Step Through Iterations</button>
     </div>
 
     <div id="loading">Loading...</div>
     <div id="graph" style="display: none;"></div>
     <div id="state"></div>
+    <div id="iteration"></div>
 
     <script>
         let network;
         let nodes = new vis.DataSet([]);
         let edges = new vis.DataSet([]);
-        let currentPair = { light: '', shadow: '' };  // Track current pair
+        let currentPair = { light: '', shadow: '' };
+        let iterations = [];
+        let currentIteration = 0;
 
         // Initialize graph
         window.onload = function() {
@@ -77,9 +82,9 @@
             const shadow = document.getElementById('shadow').value.trim();
             if (!light || !shadow) return;
 
-            currentPair = { light, shadow };  // Store for slider updates
+            currentPair = { light, shadow };
             document.getElementById('loading').style.display = 'block';
-            document.getElementById('controls').style.display = 'block';  // Show sliders
+            document.getElementById('controls').style.display = 'block';
 
             fetch('/add_polarity', {
                 method: 'POST',
@@ -96,9 +101,11 @@
                     { id: light, label: light, polarity: 'light', maturity: data.maturity_light, color: '#00ff00' },
                     { id: shadow, label: shadow, polarity: 'shadow', maturity: data.maturity_shadow, color: '#ff0000' }
                 ]);
-                edges.update([{ from: light, to: shadow, label: 'Polarity', color: '#0000ff', tension: data.tension }]);
-                document.getElementById('state').innerHTML = data.state || 'Pair added';
-                if (data.iterations.length) console.log('Tango iterations:', data.iterations);
+                edges.update([{ from: light, to: shadow, label: `Tension: ${data.tension.toFixed(2)}`, color: '#0000ff', width: 1 }]);
+                iterations = data.iterations;
+                currentIteration = 0;
+                document.getElementById('state').innerHTML = data.state;
+                document.getElementById('iteration').innerHTML = '';
                 document.getElementById('loading').style.display = 'none';
             })
             .catch(error => {
@@ -107,13 +114,13 @@
             });
         });
 
-        // Update sliders' displayed values
+        // Update sliders' displayed values and graph
         ['maturity', 'fear', 'extremity'].forEach(id => {
             const slider = document.getElementById(id);
             const valueSpan = document.getElementById(id + 'Value');
             slider.addEventListener('input', () => {
                 valueSpan.textContent = slider.value;
-                updateGraph();  // Trigger graph update on slider change
+                updateGraph();
             });
         });
 
@@ -137,14 +144,34 @@
             .then(data => {
                 if (data.error) throw new Error(data.error);
                 nodes.update([
-                    { id: currentPair.light, label: currentPair.light, polarity: 'light', maturity: data.maturity_light, 
-                      color: { background: fear > 0.7 ? '#ff9999' : '#00ff00', border: fear > 0.7 ? '#ff0000' : '#000000' } },
-                    { id: currentPair.shadow, label: currentPair.shadow, polarity: 'shadow', maturity: data.maturity_shadow, 
-                      color: { background: fear > 0.7 ? '#ff9999' : '#ff0000', border: fear > 0.7 ? '#ff0000' : '#000000' } }
+                    { 
+                        id: currentPair.light, 
+                        label: currentPair.light, 
+                        polarity: data.polarity_light, 
+                        maturity: data.maturity_light, 
+                        color: data.polarity_light === 'light' ? (data.fear > 0.7 ? '#ff9999' : '#00ff00') : '#ff0000',
+                        size: data.maturity_light * 10
+                    },
+                    { 
+                        id: currentPair.shadow, 
+                        label: currentPair.shadow, 
+                        polarity: data.polarity_shadow, 
+                        maturity: data.maturity_shadow, 
+                        color: data.polarity_shadow === 'shadow' ? (data.fear > 0.7 ? '#ff9999' : '#ff0000') : '#00ff00',
+                        size: data.maturity_shadow * 10
+                    }
                 ]);
-                edges.update([{ from: currentPair.light, to: currentPair.shadow, label: `Tension: ${data.tension.toFixed(2)}`, 
-                               color: extremity > 0.7 ? '#ff6600' : '#0000ff', width: extremity * 5 + 1 }]);
-                document.getElementById('state').innerHTML = data.state || 'Graph updated';
+                edges.update([{
+                    from: currentPair.light, 
+                    to: currentPair.shadow, 
+                    label: `Tension: ${data.tension.toFixed(2)}`,
+                    color: data.extremity > 0.7 ? '#ff6600' : '#0000ff',
+                    width: data.extremity * 5 + 1
+                }]);
+                iterations = data.iterations;
+                currentIteration = 0;
+                document.getElementById('state').innerHTML = data.state;
+                document.getElementById('iteration').innerHTML = '';
                 document.getElementById('loading').style.display = 'none';
             })
             .catch(error => {
@@ -153,10 +180,38 @@
             });
         }
 
+        // Step through iterations
+        document.getElementById('stepIterations').addEventListener('click', function() {
+            if (!iterations.length || currentIteration >= iterations.length) return;
+            const iter = iterations[currentIteration];
+            document.getElementById('iteration').innerHTML = `Iteration ${iter.iteration}: ${iter.changes.join('; ')}`;
+            // Animate edge pulse for changes
+            if (iter.changes.length) {
+                edges.update([{ 
+                    from: currentPair.light, 
+                    to: currentPair.shadow, 
+                    color: { color: '#ff0000', highlight: '#ff0000' },
+                    width: 5
+                }]);
+                setTimeout(() => {
+                    edges.update([{ 
+                        from: currentPair.light, 
+                        to: currentPair.shadow, 
+                        color: { color: iterations[currentIteration].extremity > 0.7 ? '#ff6600' : '#0000ff' },
+                        width: iterations[currentIteration].extremity * 5 + 1
+                    }]);
+                }, 500);
+            }
+            currentIteration = (currentIteration + 1) % iterations.length;
+        });
+
         // Hover tooltips
         network.on('hoverNode', function(params) {
             const node = nodes.get(params.node);
-            console.log(`Node: ${node.label} - Polarity: ${node.polarity}, Maturity: ${node.maturity}`);
+            let tooltip = `Node: ${node.label} - Polarity: ${node.polarity}, Maturity: ${node.maturity}`;
+            const flips = iterations.flatMap(iter => iter.changes.filter(c => c.includes(node.label)));
+            if (flips.length) tooltip += `<br>Flip history: ${flips.join('; ')}`;
+            console.log(tooltip);
         });
     </script>
 </body>
