@@ -11,16 +11,18 @@
         #loading { text-align: center; margin: 20px; display: block; }
         form { margin-bottom: 20px; }
         input[type="text"] { width: 200px; margin-right: 10px; }
+        input[type="range"] { width: 200px; }
         button { padding: 8px 16px; }
+        #state { margin-top: 10px; font-style: italic; }
     </style>
 </head>
 <body>
     <h1>Polarity & Maturity Model</h1>
     <h5>Create Polarity Graph</h5>
-    <p>3 3 0.5</p> <!-- Existing placeholders -->
+    <p>3 3 0.5</p>
     <hr>
 
-    <!-- New Polarity Pair Form -->
+    <!-- Polarity Pair Form -->
     <form id="polarityForm">
         <label for="light">Light Aspect:</label>
         <input type="text" id="light" name="light" placeholder="e.g., good" required>
@@ -29,52 +31,60 @@
         <button type="submit">Add Pair</button>
     </form>
 
-    <!-- Existing Prompt Form (for full prompts) -->
-    <form id="promptForm" style="display: none;"> <!-- Hide if not needed initially -->
-        <label for="prompt">Enter full prompt:</label><br>
-        <textarea id="prompt" name="prompt" rows="4" cols="50"></textarea><br>
-        <button type="submit">Submit Prompt</button>
-    </form>
+    <!-- Handles: Sliders for Maturity, Fear, Extremity -->
+    <div id="controls" style="display: none;">
+        <label for="maturity">Maturity (1-5):</label>
+        <input type="range" id="maturity" name="maturity" min="1" max="5" value="3" step="1">
+        <span id="maturityValue">3</span><br>
+        <label for="fear">Fear (0-1):</label>
+        <input type="range" id="fear" name="fear" min="0" max="1" value="0.5" step="0.1">
+        <span id="fearValue">0.5</span><br>
+        <label for="extremity">Extremity (0-1):</label>
+        <input type="range" id="extremity" name="extremity" min="0" max="1" value="0.5" step="0.1">
+        <span id="extremityValue">0.5</span><br>
+    </div>
 
     <div id="loading">Loading...</div>
     <div id="graph" style="display: none;"></div>
+    <div id="state"></div>
 
     <script>
-        let network;  // Global Vis.js network
+        let network;
         let nodes = new vis.DataSet([]);
         let edges = new vis.DataSet([]);
+        let currentPair = { light: '', shadow: '' };  // Track current pair
 
-        // Initialize editable graph on load
+        // Initialize graph
         window.onload = function() {
             const container = document.getElementById('graph');
             const data = { nodes: nodes, edges: edges };
             const options = {
-                manipulation: { enabled: true },  // Enable add/remove/edit nodes/edges via UI
+                manipulation: { enabled: true },
                 physics: { enabled: true, repulsion: { nodeDistance: 200 } },
                 nodes: { shape: 'dot', font: { size: 14 } },
-                edges: { smooth: false, arrows: 'to' },  // Directional for polarity flow
+                edges: { smooth: false, arrows: 'to' },
                 interaction: { hover: true, zoomView: true }
             };
             network = new vis.Network(container, data, options);
-
             document.getElementById('loading').style.display = 'none';
             document.getElementById('graph').style.display = 'block';
         };
 
-        // Handle Polarity Pair Addition
+        // Add Polarity Pair
         document.getElementById('polarityForm').addEventListener('submit', function(e) {
             e.preventDefault();
             const light = document.getElementById('light').value.trim();
             const shadow = document.getElementById('shadow').value.trim();
             if (!light || !shadow) return;
 
+            currentPair = { light, shadow };  // Store for slider updates
             document.getElementById('loading').style.display = 'block';
-            document.getElementById('loading').innerHTML = 'Adding polarity pair...';
+            document.getElementById('controls').style.display = 'block';  // Show sliders
 
             fetch('/add_polarity', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ light: light, shadow: shadow })
+                body: JSON.stringify({ light, shadow })
             })
             .then(response => {
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -82,15 +92,13 @@
             })
             .then(data => {
                 if (data.error) throw new Error(data.error);
-
-                // Add/Update nodes and edge
-                nodes.update([{ id: light, label: light, polarity: 'light', maturity: data.maturity_light || 3, color: '#00ff00' }]);
-                nodes.update([{ id: shadow, label: shadow, polarity: 'shadow', maturity: data.maturity_shadow || 2, color: '#ff0000' }]);
-                edges.update([{ from: light, to: shadow, label: 'Polarity', color: '#0000ff', tension: data.tension || 0.5 }]);
-
-                // Log iterations if sim ran
+                nodes.update([
+                    { id: light, label: light, polarity: 'light', maturity: data.maturity_light, color: '#00ff00' },
+                    { id: shadow, label: shadow, polarity: 'shadow', maturity: data.maturity_shadow, color: '#ff0000' }
+                ]);
+                edges.update([{ from: light, to: shadow, label: 'Polarity', color: '#0000ff', tension: data.tension }]);
+                document.getElementById('state').innerHTML = data.state || 'Pair added';
                 if (data.iterations.length) console.log('Tango iterations:', data.iterations);
-
                 document.getElementById('loading').style.display = 'none';
             })
             .catch(error => {
@@ -99,13 +107,51 @@
             });
         });
 
-        // Optional: Handle full prompt submission (from existing form)
-        document.getElementById('promptForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const prompt = document.getElementById('prompt').value;
-            // Similar fetch to /generate_graph, update nodes/edges
-            // ... (keep existing logic if needed)
+        // Update sliders' displayed values
+        ['maturity', 'fear', 'extremity'].forEach(id => {
+            const slider = document.getElementById(id);
+            const valueSpan = document.getElementById(id + 'Value');
+            slider.addEventListener('input', () => {
+                valueSpan.textContent = slider.value;
+                updateGraph();  // Trigger graph update on slider change
+            });
         });
+
+        // Update graph with slider values
+        function updateGraph() {
+            if (!currentPair.light || !currentPair.shadow) return;
+            const maturity = parseFloat(document.getElementById('maturity').value);
+            const fear = parseFloat(document.getElementById('fear').value);
+            const extremity = parseFloat(document.getElementById('extremity').value);
+
+            document.getElementById('loading').style.display = 'block';
+            fetch('/update_polarity', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ light: currentPair.light, shadow: currentPair.shadow, maturity, fear, extremity })
+            })
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) throw new Error(data.error);
+                nodes.update([
+                    { id: currentPair.light, label: currentPair.light, polarity: 'light', maturity: data.maturity_light, 
+                      color: { background: fear > 0.7 ? '#ff9999' : '#00ff00', border: fear > 0.7 ? '#ff0000' : '#000000' } },
+                    { id: currentPair.shadow, label: currentPair.shadow, polarity: 'shadow', maturity: data.maturity_shadow, 
+                      color: { background: fear > 0.7 ? '#ff9999' : '#ff0000', border: fear > 0.7 ? '#ff0000' : '#000000' } }
+                ]);
+                edges.update([{ from: currentPair.light, to: currentPair.shadow, label: `Tension: ${data.tension.toFixed(2)}`, 
+                               color: extremity > 0.7 ? '#ff6600' : '#0000ff', width: extremity * 5 + 1 }]);
+                document.getElementById('state').innerHTML = data.state || 'Graph updated';
+                document.getElementById('loading').style.display = 'none';
+            })
+            .catch(error => {
+                console.error('Update polarity error:', error);
+                document.getElementById('loading').innerHTML = `Error: ${error.message}`;
+            });
+        }
 
         // Hover tooltips
         network.on('hoverNode', function(params) {
