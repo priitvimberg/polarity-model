@@ -8,99 +8,110 @@
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; }
         #graph { width: 100%; height: 600px; border: 1px solid #ccc; }
-        #loading { text-align: center; margin: 20px; display: none; }
-        #promptForm { margin-bottom: 20px; }
-        textarea { width: 100%; max-width: 500px; }
+        #loading { text-align: center; margin: 20px; display: block; }
+        form { margin-bottom: 20px; }
+        input[type="text"] { width: 200px; margin-right: 10px; }
         button { padding: 8px 16px; }
     </style>
 </head>
 <body>
     <h1>Polarity & Maturity Model</h1>
     <h5>Create Polarity Graph</h5>
-    <p>3 3 0.5</p> <!-- Placeholder params from live site -->
+    <p>3 3 0.5</p> <!-- Existing placeholders -->
     <hr>
 
-    <form id="promptForm">
-        <label for="prompt">Enter your prompt (e.g., "Map Victim-Rescuer dynamic in an org team, Adapted Child maturity, no consent"):</label><br>
-        <textarea id="prompt" name="prompt" rows="4" cols="50" required></textarea><br>
-        <button type="submit">Submit</button>
+    <!-- New Polarity Pair Form -->
+    <form id="polarityForm">
+        <label for="light">Light Aspect:</label>
+        <input type="text" id="light" name="light" placeholder="e.g., good" required>
+        <label for="shadow">Shadow Aspect:</label>
+        <input type="text" id="shadow" name="shadow" placeholder="e.g., bad" required>
+        <button type="submit">Add Pair</button>
+    </form>
+
+    <!-- Existing Prompt Form (for full prompts) -->
+    <form id="promptForm" style="display: none;"> <!-- Hide if not needed initially -->
+        <label for="prompt">Enter full prompt:</label><br>
+        <textarea id="prompt" name="prompt" rows="4" cols="50"></textarea><br>
+        <button type="submit">Submit Prompt</button>
     </form>
 
     <div id="loading">Loading...</div>
     <div id="graph" style="display: none;"></div>
 
     <script>
-        // Hide loading on load, show form
+        let network;  // Global Vis.js network
+        let nodes = new vis.DataSet([]);
+        let edges = new vis.DataSet([]);
+
+        // Initialize editable graph on load
         window.onload = function() {
+            const container = document.getElementById('graph');
+            const data = { nodes: nodes, edges: edges };
+            const options = {
+                manipulation: { enabled: true },  // Enable add/remove/edit nodes/edges via UI
+                physics: { enabled: true, repulsion: { nodeDistance: 200 } },
+                nodes: { shape: 'dot', font: { size: 14 } },
+                edges: { smooth: false, arrows: 'to' },  // Directional for polarity flow
+                interaction: { hover: true, zoomView: true }
+            };
+            network = new vis.Network(container, data, options);
+
             document.getElementById('loading').style.display = 'none';
-            document.getElementById('promptForm').style.display = 'block';
-            document.getElementById('graph').style.display = 'none';
+            document.getElementById('graph').style.display = 'block';
         };
 
-        document.getElementById('promptForm').addEventListener('submit', function(e) {
+        // Handle Polarity Pair Addition
+        document.getElementById('polarityForm').addEventListener('submit', function(e) {
             e.preventDefault();
-            const prompt = document.getElementById('prompt').value;
-            if (!prompt) return;
+            const light = document.getElementById('light').value.trim();
+            const shadow = document.getElementById('shadow').value.trim();
+            if (!light || !shadow) return;
 
             document.getElementById('loading').style.display = 'block';
-            document.getElementById('loading').innerHTML = 'Parsing prompt with Grok...';
+            document.getElementById('loading').innerHTML = 'Adding polarity pair...';
 
-            fetch('/generate_graph', {
+            fetch('/add_polarity', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt: prompt })
+                body: JSON.stringify({ light: light, shadow: shadow })
             })
             .then(response => {
-                if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 return response.json();
             })
             .then(data => {
                 if (data.error) throw new Error(data.error);
+
+                // Add/Update nodes and edge
+                nodes.update([{ id: light, label: light, polarity: 'light', maturity: data.maturity_light || 3, color: '#00ff00' }]);
+                nodes.update([{ id: shadow, label: shadow, polarity: 'shadow', maturity: data.maturity_shadow || 2, color: '#ff0000' }]);
+                edges.update([{ from: light, to: shadow, label: 'Polarity', color: '#0000ff', tension: data.tension || 0.5 }]);
+
+                // Log iterations if sim ran
+                if (data.iterations.length) console.log('Tango iterations:', data.iterations);
+
                 document.getElementById('loading').style.display = 'none';
-                document.getElementById('graph').style.display = 'block';
-                renderGraph(data.nodes, data.edges, data.iterations);
             })
             .catch(error => {
-                console.error('Fetch/Render error:', error);
-                document.getElementById('loading').innerHTML = `Error: ${error.message}. Check console.`;
-                document.getElementById('loading').style.display = 'block';
+                console.error('Add polarity error:', error);
+                document.getElementById('loading').innerHTML = `Error: ${error.message}`;
             });
         });
 
-        // Enhanced Vis.js renderer
-        function renderGraph(nodesData, edgesData, iterations = []) {
-            const container = document.getElementById('graph');
-            const data = {
-                nodes: new vis.DataSet(nodesData.map(n => ({
-                    ...n,
-                    size: n.maturity * 10 + 10,
-                    color: n.polarity === 'light' ? '#00ff00' : '#ff0000'
-                }))),
-                edges: new vis.DataSet(edgesData.map(e => ({
-                    ...e,
-                    color: e.tension > 0.5 ? '#ff6600' : '#0000ff',
-                    arrows: e.direction ? 'to' : 'none'
-                })))
-            };
-            const options = {
-                physics: { enabled: true, repulsion: { nodeDistance: 200 } },
-                nodes: { shape: 'dot', font: { size: 14 } },
-                edges: { smooth: false },
-                interaction: { hover: true, zoomView: true }
-            };
-            const network = new vis.Network(container, data, options);
+        // Optional: Handle full prompt submission (from existing form)
+        document.getElementById('promptForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const prompt = document.getElementById('prompt').value;
+            // Similar fetch to /generate_graph, update nodes/edges
+            // ... (keep existing logic if needed)
+        });
 
-            // Hover tooltips for nodes
-            network.on('hoverNode', function(params) {
-                const node = data.nodes.get(params.node);
-                console.log(`Node ${node.id}: ${node.label} - Maturity: ${node.maturity}, Polarity: ${node.polarity}`);
-            });
-
-            // Log iterations (tango steps)
-            if (iterations.length) {
-                console.log('Tango iterations:', iterations);
-            }
-        }
+        // Hover tooltips
+        network.on('hoverNode', function(params) {
+            const node = nodes.get(params.node);
+            console.log(`Node: ${node.label} - Polarity: ${node.polarity}, Maturity: ${node.maturity}`);
+        });
     </script>
 </body>
 </html>
